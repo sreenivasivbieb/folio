@@ -1,0 +1,8 @@
+{
+  "text": "Notes from the Budget Sync. Anita Rao attended the Budget Sync. The Budget Sync was held on 12 May 2026.",
+  "known": [{"name": "Budget Sync", "type": "Meeting"}],
+  "expected": [
+    {"subject": "Anita Rao", "predicate": "attended", "object": "Budget Sync"},
+    {"subject": "Budget Sync", "predicate": "held_on", "value": "2026-05-12"}
+  ]
+}

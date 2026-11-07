@@ -1,0 +1,7 @@
+{
+  "text": "Please loop in Daniel Ortiz <daniel@initech.example> before Friday.",
+  "known": [],
+  "expected": [
+    {"subject": "Daniel Ortiz", "predicate": "email", "value": "daniel@initech.example"}
+  ]
+}

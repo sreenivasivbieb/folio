@@ -1,0 +1,57 @@
+[project]
+name = "folio-core"
+version = "0.1.0"
+description = "Folio core service: ingestion, speech, extraction, query and the event ledger (runs as the desktop app's sidecar)."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn>=0.30",
+  "pydantic>=2.8",
+  "httpx>=0.27",
+  "pyyaml>=6.0",
+  "numpy>=1.26",
+  "pypdfium2>=4.30",
+  "python-docx>=1.1",
+  "pillow>=10.4",
+  "watchdog>=4.0",
+  "sqlite-vec>=0.1.6",
+]
+
+[project.optional-dependencies]
+# Real local speech-to-text + microphone capture (models download on first use).
+speech = ["faster-whisper>=1.0", "sounddevice>=0.5"]
+# Real local text embeddings via ONNX Runtime.
+embeddings = ["fastembed>=0.4"]
+
+[project.scripts]
+folio-core = "folio_core.main:cli"
+
+# Third-party parsers register here without touching core code (NFR: extensibility).
+# [project.entry-points."folio.parsers"]
+# my_parser = "my_pkg.parsers:MyParser"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/folio_core"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Query", "fastapi.Depends"]

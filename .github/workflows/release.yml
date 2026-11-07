@@ -1,0 +1,37 @@
+# Installers for Windows, macOS and Linux: PyInstaller sidecar + Tauri bundle.
+# Phase 0 spike (proposal: "Packaging a Python sidecar on three operating systems") — run it
+# manually and inspect the artifacts before trusting it for users.
+name: Release (spike)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  bundle:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: astral-sh/setup-uv@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev
+      - run: npm ci
+      - name: Build core sidecar binary
+        shell: bash
+        run: scripts/build-sidecar.sh
+      - name: Build installers
+        working-directory: apps/desktop
+        run: npx tauri build --config src-tauri/tauri.release.conf.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: folio-${{ matrix.os }}
+          path: apps/desktop/src-tauri/target/release/bundle/

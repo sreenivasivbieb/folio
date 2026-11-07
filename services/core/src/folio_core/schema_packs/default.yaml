@@ -1,0 +1,90 @@
+# Default schema pack for personal / small-team knowledge.
+# Entity types follow the proposal's open question: Person, Project, Meeting, Contract, Decision.
+name: default
+version: 1
+
+entity_types:
+  Person:
+    description: A human being.
+    color: "#4C8BF5"
+    phrases: [person, people, colleague, contact]
+    attributes:
+      email: { type: email, description: Email address }
+      role: { type: string, description: Job title or role, phrases: [role, title] }
+  Organization:
+    description: A company, team, client or institution.
+    color: "#F59E0B"
+    phrases: [organization, organisation, company, client, vendor, team]
+    attributes:
+      website: { type: url }
+  Project:
+    description: A named piece of work.
+    color: "#10B981"
+    phrases: [project, initiative]
+    attributes:
+      status: { type: string, phrases: [status] }
+      deadline: { type: date, phrases: [deadline, due] }
+  Meeting:
+    description: A meeting or call.
+    color: "#8B5CF6"
+    phrases: [meeting, call, sync, standup]
+    attributes:
+      held_on: { type: date, phrases: [held, "on"] }
+  Contract:
+    description: An agreement between parties.
+    color: "#EF4444"
+    phrases: [contract, agreement, msa, nda, sow]
+    attributes:
+      signed_on: { type: date, phrases: [signed, executed] }
+      value: { type: money, phrases: [worth, value] }
+      expires_on: { type: date, phrases: [expires, ends] }
+  Decision:
+    description: Something that was decided.
+    color: "#EC4899"
+    phrases: [decision]
+    attributes:
+      decided_on: { type: date, phrases: [decided] }
+  Document:
+    description: A file or document as a whole.
+    color: "#6B7280"
+    phrases: [document, file, pdf, doc, report, invoice, deck, video, recording, image, photo]
+    attributes:
+      title: { type: string }
+
+relation_types:
+  owns:
+    description: Is responsible for / owns.
+    source: [Person, Organization]
+    target: [Project, Contract, Document, Decision]
+    phrases: [owns, own, is responsible for]
+    noun: owner
+  works_at:
+    description: Is employed by or a member of.
+    source: [Person]
+    target: [Organization]
+    phrases: [works at, works for, is at]
+  party_to:
+    description: Is a party to an agreement.
+    source: [Person, Organization]
+    target: [Contract]
+    phrases: [signed with, is party to]
+    noun: party
+  attended:
+    source: [Person]
+    target: [Meeting]
+    phrases: [attended, joined]
+    noun: attendee
+  decided_in:
+    source: [Decision]
+    target: [Meeting]
+    phrases: [decided in, was decided in]
+  about:
+    description: Concerns or relates to.
+    source: ["*"]
+    target: [Project, Contract, Organization]
+    phrases: [is about, relates to, concerns]
+  leads:
+    source: [Person]
+    target: [Project, Organization]
+    phrases: [leads, manages, runs]
+    noun: lead

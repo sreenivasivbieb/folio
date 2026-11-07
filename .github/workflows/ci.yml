@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  core:
+    name: Core (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: System tools for parsers
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg tesseract-ocr
+      - name: Install
+        working-directory: services/core
+        run: uv sync
+      - name: Lint
+        working-directory: services/core
+        run: uv run ruff check src tests
+      - name: Test
+        working-directory: services/core
+        run: uv run pytest
+      - name: Extraction quality gate
+        working-directory: services/core
+        run: uv run folio-core eval ../../eval/golden --min-precision 0.8
+
+  ui:
+    name: UI + generated client
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: astral-sh/setup-uv@v5
+      - run: npm ci
+      - name: Generated API client is up to date
+        run: |
+          (cd services/core && uv sync)
+          npm run gen:client
+          git diff --exit-code packages/api-client || (echo "::error::Run 'npm run gen:client' and commit the result" && exit 1)
+      - run: npm run typecheck
+      - run: npm test -w @folio/ui
+      - run: npm run build:ui
+
+  desktop:
+    name: Desktop shell (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: apps/desktop/src-tauri }
+      - name: Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev
+      - run: npm ci
+      - run: npm run build:ui
+      - name: Build shell
+        working-directory: apps/desktop/src-tauri
+        run: cargo build --locked

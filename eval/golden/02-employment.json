@@ -1,0 +1,8 @@
+{
+  "text": "Rahul Verma works at Acme Corp. Meera Iyer leads the Atlas Project.",
+  "known": [{"name": "Acme Corp", "type": "Organization"}],
+  "expected": [
+    {"subject": "Rahul Verma", "predicate": "works_at", "object": "Acme Corp"},
+    {"subject": "Meera Iyer", "predicate": "leads", "object": "Atlas Project"}
+  ]
+}

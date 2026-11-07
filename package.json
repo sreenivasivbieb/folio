@@ -1,0 +1,17 @@
+{
+  "name": "folio",
+  "private": true,
+  "description": "Local-first voice labeling & knowledge organization platform",
+  "workspaces": ["packages/*", "apps/ui", "apps/desktop"],
+  "scripts": {
+    "dev:core": "cd services/core && FOLIO_TOKEN=dev uv run folio-core serve --port 8765",
+    "dev:ui": "npm run dev -w @folio/ui",
+    "dev:desktop": "npm run dev -w @folio/desktop",
+    "gen:client": "npm run generate -w @folio/api-client",
+    "build:ui": "npm run build -w @folio/ui",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test:core": "cd services/core && uv run pytest",
+    "lint:core": "cd services/core && uv run ruff check src tests",
+    "eval": "cd services/core && uv run folio-core eval ../../eval/golden --min-precision 0.8"
+  }
+}
