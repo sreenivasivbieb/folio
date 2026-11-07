@@ -130,7 +130,8 @@ def cmd_voice(args: argparse.Namespace) -> int:
 def cmd_eval(args: argparse.Namespace) -> int:
     from .evaluation import run_eval
 
-    report = run_eval(Path(args.golden))
+    golden = Path(args.golden) if args.golden else Path(__file__).resolve().parents[4] / "eval" / "golden"
+    report = run_eval(golden)
     print(json.dumps(report, indent=2))
     ok = report["precision"] >= args.min_precision
     if not ok:
@@ -166,7 +167,7 @@ def cli(argv: list[str] | None = None) -> int:
     v.set_defaults(fn=cmd_voice)
 
     e = sub.add_parser("eval", help="extraction quality on a golden set")
-    e.add_argument("golden", nargs="?", default=str(Path(__file__).resolve().parents[4] / "eval" / "golden"))
+    e.add_argument("golden", nargs="?", default=None, help="folder of golden cases (default: repo eval/golden)")
     e.add_argument("--min-precision", type=float, default=0.0)
     e.set_defaults(fn=cmd_eval)
 

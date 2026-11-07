@@ -8,7 +8,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CORE="$ROOT/services/core"
 OUT="$ROOT/apps/desktop/src-tauri/binaries"
-TRIPLE="$(rustc -vV | sed -n 's/^host: //p')"
+RUSTC="$(command -v rustc || echo "$HOME/.cargo/bin/rustc")"
+[ -x "$RUSTC" ] || { echo "rustc not found (needed for the target triple)" >&2; exit 1; }
+TRIPLE="$("$RUSTC" -vV | sed -n 's/^host: //p')"
 EXT=""
 case "$TRIPLE" in *windows*) EXT=".exe" ;; esac
 
