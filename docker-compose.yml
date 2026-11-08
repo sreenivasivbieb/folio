@@ -1,0 +1,34 @@
+# Folio knowledge store: MongoDB as a single-node replica set (transactions need a replica set;
+# the event ledger writes every action atomically). Bound to localhost only — nothing is exposed
+# to the network.
+#
+#   docker compose up -d        # start (data persists in the `folio-mongo` volume)
+#   docker compose down         # stop (keeps data)
+#
+# The core connects to mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true
+# (override with FOLIO_MONGO_URI / FOLIO_MONGO_DB).
+services:
+  mongo:
+    image: mongo:8.0
+    container_name: folio-mongo
+    command: ["--replSet", "rs0", "--bind_ip_all", "--quiet"]
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - folio-mongo:/data/db
+    restart: unless-stopped
+    healthcheck:
+      # Initialise the one-member replica set on first start, then report healthy.
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - "try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: '127.0.0.1:27017'}]}).ok }"
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 5s
+
+volumes:
+  folio-mongo:

@@ -91,16 +91,14 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
 
 def cmd_openapi(args: argparse.Namespace) -> int:
-    import tempfile
+    """Print the API spec. Needs no database: the routes are introspected, never called."""
+    from types import SimpleNamespace
 
     from .api.app import create_app
     from .config import Settings
-    from .container import build_container
 
-    with tempfile.TemporaryDirectory() as tmp:
-        container = build_container(Settings(data_dir=Path(tmp), stt="none"))
-        spec = create_app(container, "x", start_background=False).openapi()
-        container.db.close()
+    stand_in = SimpleNamespace(settings=Settings())
+    spec = create_app(stand_in, "x", start_background=False).openapi()  # type: ignore[arg-type]
     text = json.dumps(spec, indent=2, ensure_ascii=False) + "\n"
     if args.out:
         Path(args.out).write_text(text)

@@ -10,8 +10,10 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
-import { useKnowledgeActions, useTable } from "@/api/queries";
+import { useKnowledgeActions, useStatus, useTable } from "@/api/queries";
 import { Confidence, EntityName, StatusBadge } from "@/components/Badges";
+import { EmptyState } from "@/components/EmptyState";
+import { Icon } from "@/components/Icon";
 import { useSourceNames } from "@/features/sources/useSourceNames";
 import { locatorLabel, predicateLabel, valueText } from "@/lib/format";
 import { useSchemaDef } from "@/lib/schema";
@@ -60,6 +62,7 @@ export function TableView() {
     predicate: predicate || undefined,
   });
   const schema = useSchemaDef();
+  const { data: appStatus } = useStatus();
   const sources = useSourceNames();
   const actions = useKnowledgeActions();
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -159,18 +162,18 @@ export function TableView() {
         </select>
         <select className="input" value={entityType} onChange={(e) => setEntityType(e.target.value)} aria-label="Type filter">
           <option value="">any type</option>
-          {Object.keys(schema?.entity_types ?? {}).map((t) => <option key={t}>{t}</option>)}
+          {(appStatus?.types ?? Object.keys(schema?.entity_types ?? {})).map((t) => <option key={t}>{t}</option>)}
         </select>
         <input className="input" placeholder="predicate…" value={predicate} onChange={(e) => setPredicate(e.target.value)} style={{ width: 120 }} />
         <span className="spacer" />
         {chosen.length > 0 && (
           <>
             <span className="small muted">{chosen.length} selected</span>
-            <button type="button" className="btn small ok" onClick={() => { actions.setClaimStatus.mutate({ ids: chosen, status: "verified" }); setRowSelection({}); }}>Verify</button>
-            <button type="button" className="btn small bad" onClick={() => { actions.setClaimStatus.mutate({ ids: chosen, status: "rejected" }); setRowSelection({}); }}>Reject</button>
+            <button type="button" className="btn sm success" onClick={() => { actions.setClaimStatus.mutate({ ids: chosen, status: "verified" }); setRowSelection({}); }}><Icon name="check" size={13} /> Confirm</button>
+            <button type="button" className="btn sm danger" onClick={() => { actions.setClaimStatus.mutate({ ids: chosen, status: "rejected" }); setRowSelection({}); }}><Icon name="x" size={13} /> Reject</button>
           </>
         )}
-        <span className="small muted">{data?.claims.length ?? 0} claims</span>
+        <span className="small muted">{data?.claims.length ?? 0} facts</span>
       </div>
       <div className="scroll">
         <table className="grid">
@@ -198,7 +201,7 @@ export function TableView() {
             ))}
           </tbody>
         </table>
-        {data?.claims.length === 0 && <div className="empty">No claims match.</div>}
+        {data?.claims.length === 0 && <EmptyState icon="table" title="No facts match">Change the filters, or connect an AI model to extract facts from your files.</EmptyState>}
       </div>
     </div>
   );

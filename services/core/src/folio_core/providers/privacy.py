@@ -9,18 +9,18 @@ from __future__ import annotations
 from typing import Any
 
 from ..domain.errors import PrivacyBlocked
-from ..store.db import Database
+from ..store.mongo import KnowledgeDB
 from ..store.repo import get_setting
 
 
-def cloud_enabled(db: Database) -> bool:
-    return bool(get_setting(db.reader(), "cloud.enabled", False))
+def cloud_enabled(kdb: KnowledgeDB) -> bool:
+    return bool(get_setting(kdb, "cloud.enabled", False))
 
 
-def ensure_allowed(db: Database, provider: Any) -> None:
-    if getattr(provider, "is_local", True):
+def ensure_allowed(kdb: KnowledgeDB, provider: Any) -> None:
+    if provider is None or getattr(provider, "is_local", True):
         return
-    if not cloud_enabled(db):
+    if not cloud_enabled(kdb):
         raise PrivacyBlocked(
             f"{provider.model_id} is a cloud provider; enable cloud for this project to use it"
         )

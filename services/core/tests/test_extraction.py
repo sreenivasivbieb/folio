@@ -11,22 +11,22 @@ from folio_core.extraction.validate import validate_output
 from folio_core.providers.llm.fake import FakeLLM
 from folio_core.store import repo
 
-from .conftest import drain, make_container
+from .conftest import drain, entity_name, make_container
 
 
 def _claims(c, predicate=None):
-    return repo.query_claims(c.db.reader(), predicate=predicate)
+    return repo.query_claims(c.kdb, predicate=predicate)
 
 
 def _names(c):
-    return {r[0] for r in c.db.reader().execute("SELECT name FROM entities")}
+    return {d["name"] for d in c.kdb["entities"].find()}
 
 
 def test_rules_extract_relations_dates_and_provenance(container, files):
     container.ingestion.add_root(str(files / "meeting-notes.md"))
     drain(container)
     owns = _claims(container, "owns")[0]
-    ents = repo.get_entities(container.db.reader(), [owns.subject_id, owns.object_id])
+    ents = repo.get_entities(container.kdb, [owns.subject_id, owns.object_id])
     assert (ents[owns.subject_id].name, ents[owns.object_id].name) == ("Priya Sharma", "Acme Contract")
     assert ents[owns.object_id].type == "Contract"
     assert owns.status == ClaimStatus.PROPOSED
@@ -37,18 +37,20 @@ def test_rules_extract_relations_dates_and_provenance(container, files):
     assert signed.value == "2026-03-03" and signed.valid_from == "2026-03-03"
 
 
-def test_validation_rejects_invented_quotes_and_unknown_types():
+def test_validation_rejects_invented_quotes_but_accepts_any_type():
     schema = load_pack()
     out = ExtractionOutput(claims=[
         CandidateClaim(subject="Priya", subject_type="Person", predicate="owns", object="X",
                        object_type="Contract", confidence=0.9, quote="Priya owns X"),
         CandidateClaim(subject="Priya", subject_type="Person", predicate="owns", object="X",
                        object_type="Contract", confidence=0.9, quote="something never said"),
-        CandidateClaim(subject="Priya", subject_type="Alien", predicate="owns", object="X",
-                       object_type="Contract", confidence=0.9, quote="Priya owns X"),
+        CandidateClaim(subject="Priya", subject_type="Starship Captain", predicate="commands", object="X",
+                       object_type="Starship", confidence=0.9, quote="Priya owns X"),
+        CandidateClaim(subject="Priya", subject_type="Person", predicate="owns", confidence=0.9,
+                       quote="Priya owns X"),  # attribute without a value
     ])
     valid, problems = validate_output(out, schema, "Hello. Priya   owns X today.")
-    assert len(valid.claims) == 1 and len(problems) == 2
+    assert len(valid.claims) == 2 and len(problems) == 2
 
 
 GOOD = {"entities": [], "claims": [{
@@ -80,7 +82,7 @@ def test_rerun_on_unchanged_data_makes_zero_model_calls(tmp_path, files):
     c.ingestion.add_root(str(files / "meeting-notes.md"))
     drain(c)
     calls = len(llm.calls)
-    src = repo.list_sources(c.db.reader())[0]
+    src = repo.list_sources(c.kdb)[0]
     c.queue.enqueue("extract_source", {"source_id": src.id})  # explicit re-extraction
     drain(c)
     assert len(llm.calls) == calls
@@ -102,7 +104,7 @@ def test_rejected_claim_is_never_reproposed_and_verified_is_never_changed(contai
 
     owns_now = _claims(container, "owns")
     assert [c.status for c in owns_now] == [ClaimStatus.REJECTED]
-    assert repo.get_claim(container.db.reader(), signed.id).status == ClaimStatus.VERIFIED
+    assert repo.get_claim(container.kdb, signed.id).status == ClaimStatus.VERIFIED
     assert "blocked" in container.queue.list("done", 1)[0].message
 
 
@@ -112,7 +114,7 @@ def test_correction_rejects_original_and_blocks_its_pattern(container, files):
     owns = _claims(container, "owns")[0]
     rahul = container.knowledge.create_entity("Person", "Rahul Verma (manual)")
     new_id = container.knowledge.edit_claim(owns.id, {"subject_id": rahul.id})
-    conn = container.db.reader()
+    conn = container.kdb
     assert repo.get_claim(conn, owns.id).status == ClaimStatus.REJECTED
     fixed = repo.get_claim(conn, new_id)
     assert fixed.status == ClaimStatus.VERIFIED and fixed.subject_id == rahul.id
@@ -125,7 +127,6 @@ def test_merge_suggestions_for_similar_names(container, tmp_path):
     container.ingestion.add_root(str(f))
     drain(container)
     sugg = container.review.queue()["merge_suggestions"]
-    names = {container.db.reader().execute("SELECT name FROM entities WHERE id=?", (x,)).fetchone()[0]
-             for s in sugg for x in (s["entity_a"], s["entity_b"])}
+    names = {entity_name(container, x) for s in sugg for x in (s["entity_a"], s["entity_b"])}
     assert {"Acme Corp", "Acme Corporation"} <= names
     assert "Acme Corp" in _names(container)

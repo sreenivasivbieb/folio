@@ -1,27 +1,35 @@
 /**
- * Voice-first labeling (FR-3). Hold the mic button (or Ctrl+Space) and speak; release to see a
- * preview. Typing a label goes through exactly the same pipeline. The target is whatever is
- * selected: a file, entities, or claims ("this is wrong, the owner is Priya").
+ * Voice-first labeling (FR-3), as a composer. Hold the mic (or Ctrl+Space) and speak; release to
+ * preview. Typing goes through exactly the same pipeline. The target is the current selection: a
+ * file, entities, or facts ("this is wrong, the owner is Priya").
  */
 import { useEffect, useState } from "react";
 import { inTauri } from "@/api/connection";
 import { useLabelActions, useSources, useStatus } from "@/api/queries";
+import { Icon } from "@/components/Icon";
 import { basename } from "@/lib/format";
-import { labelTarget, type Selection, ui } from "@/state/selection";
+import { labelTarget, openSettings, type Selection, ui } from "@/state/selection";
 import { LabelPreview } from "./LabelPreview";
 
-function describe(sel: Selection, sourceName: (id: string) => string): string {
+function describe(sel: Selection, sourceName: (id: string) => string): string | null {
   switch (sel.kind) {
     case "source":
-      return `file: ${sourceName(sel.id)}`;
+      return sourceName(sel.id);
     case "entity":
       return sel.ids.length === 1 ? "1 entity" : `${sel.ids.length} entities`;
     case "claim":
       return sel.ids.length === 1 ? "1 fact" : `${sel.ids.length} facts`;
     default:
-      return "nothing selected";
+      return null;
   }
 }
+
+const EXAMPLES: Record<Selection["kind"], string> = {
+  source: "This PDF is the Acme contract, Priya owns it, signed March 3",
+  entity: "Priya leads it · it is a Course · merge these two",
+  claim: "This is wrong, the owner is Priya",
+  none: "Select a file, entity or fact — then say or type what it is",
+};
 
 export function VoiceBar() {
   const selection = ui.use((s) => s.selection);
@@ -34,9 +42,10 @@ export function VoiceBar() {
   const voice = status?.voice;
   const canSpeak = !!voice?.speech_available && !!voice?.microphone;
   const sourceName = (id: string) => basename(sources?.find((s) => s.id === id)?.path ?? id);
+  const target = describe(selection, sourceName);
 
   const start = () => {
-    if (!canSpeak || recording) return;
+    if (!canSpeak || ui.get().recording) return;
     ui.set({ recording: true });
     actions.start.mutate(labelTarget(ui.get().selection), { onError: () => ui.set({ recording: false }) });
   };
@@ -44,6 +53,11 @@ export function VoiceBar() {
     if (!ui.get().recording) return;
     ui.set({ recording: false });
     actions.stop.mutate(undefined);
+  };
+  const submit = () => {
+    if (!text.trim()) return;
+    actions.typed.mutate({ transcript: text.trim(), target: labelTarget(selection) });
+    setText("");
   };
 
   // Global hotkey (Ctrl+Alt+Space) from the desktop shell: hold to talk even when unfocused.
@@ -76,41 +90,43 @@ export function VoiceBar() {
     };
   });
 
-  const micTitle = canSpeak
-    ? "Hold to talk (Ctrl+Space)"
-    : voice
-      ? `Voice unavailable: ${voice.speech_available ? voice.microphone_detail : "no speech model installed"} — type the label instead`
-      : "";
-
   return (
-    <div className="voicebar">
-      <button
-        type="button"
-        className={`ptt ${recording ? "recording" : ""}`}
-        disabled={!canSpeak}
-        title={micTitle}
-        onPointerDown={start}
-        onPointerUp={stop}
-        onPointerLeave={stop}
-        aria-label="Push to talk"
-      >
-        🎙
-      </button>
-      <span className="target" title="Labels apply to the current selection">→ {describe(selection, sourceName)}</span>
-      <input
-        className="input"
-        style={{ flex: 1 }}
-        placeholder={recording ? "Listening… release to preview" : "Type a label — e.g. “This PDF is the Acme contract, Priya owns it, signed March 3”"}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && text.trim()) {
-            actions.typed.mutate({ transcript: text.trim(), target: labelTarget(selection) });
-            setText("");
-          }
-        }}
-      />
-      <span className="kbd">Enter</span>
+    <div className="voice">
+      <div className="composer">
+        <button
+          type="button"
+          className={`ptt ${recording ? "recording" : ""}`}
+          disabled={!canSpeak}
+          title={canSpeak ? "Hold to talk (Ctrl+Space)" : "Voice is not set up — open Settings → Voice"}
+          onPointerDown={start}
+          onPointerUp={stop}
+          onPointerLeave={stop}
+          aria-label="Push to talk"
+        >
+          <Icon name="mic" size={17} />
+        </button>
+        <span className={`target-chip ${target ? "set" : ""}`} title="Labels apply to the current selection">
+          <Icon name={selection.kind === "source" ? "file" : selection.kind === "none" ? "info" : "layers"} size={12} />
+          <span className="ellipsis">{target ?? "Nothing selected"}</span>
+        </span>
+        <input
+          placeholder={recording ? "Listening… release to preview" : EXAMPLES[selection.kind]}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
+          aria-label="Type a label"
+        />
+        <button type="button" className="btn primary icon-only" disabled={!text.trim() || actions.typed.isPending} onClick={submit} title="Preview label (Enter)">
+          {actions.typed.isPending ? <Icon name="loader" spin /> : <Icon name="send" />}
+        </button>
+      </div>
+      <div className="composer-hint">
+        {canSpeak
+          ? <span>Hold <span className="kbd">Ctrl</span> <span className="kbd">Space</span> to talk</span>
+          : <button type="button" className="btn ghost sm" onClick={() => openSettings("voice")}><Icon name="mic" size={12} /> Set up voice</button>}
+        <span>Nothing is saved until you confirm the preview</span>
+        <span><span className="kbd">Ctrl</span> <span className="kbd">Z</span> undoes anything</span>
+      </div>
       {label && <LabelPreview label={label} actions={actions} />}
     </div>
   );

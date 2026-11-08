@@ -27,7 +27,7 @@ class FolderWatcher:
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._flusher: threading.Thread | None = None
-        self._watched: set[str] = set()
+        self._watched: dict[str, object] = {}  # root path -> watchdog ObservedWatch
 
     def start(self) -> None:
         try:
@@ -58,15 +58,18 @@ class FolderWatcher:
                     if p:
                         watcher._queue(Path(p if isinstance(p, str) else p.decode()))
 
-        for root in self.ingestion.roots():
-            if not root.watch or root.path in self._watched:
+        wanted = {r.path: r for r in self.ingestion.roots() if r.watch}
+        for path in list(self._watched):
+            if path not in wanted:  # root removed: stop watching it
+                self._observer.unschedule(self._watched.pop(path))
+        for path, root in wanted.items():
+            if path in self._watched:
                 continue
-            target = Path(root.path)
+            target = Path(path)
             watch_dir = target if root.kind == "folder" else target.parent
             if not watch_dir.exists():
                 continue
-            self._observer.schedule(Handler(), str(watch_dir), recursive=root.kind == "folder")
-            self._watched.add(root.path)
+            self._watched[path] = self._observer.schedule(Handler(), str(watch_dir), recursive=root.kind == "folder")
 
     def _queue(self, path: Path) -> None:
         with self._lock:

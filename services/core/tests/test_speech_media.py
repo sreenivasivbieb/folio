@@ -22,7 +22,10 @@ class FakeTranscriber:
         self.segments = segments
         self.prompts: list[str | None] = []
 
-    def transcribe(self, audio_path: Path, language=None, prompt=None):  # type: ignore[no-untyped-def]
+    def installed(self) -> bool:
+        return True
+
+    def transcribe(self, audio_path: Path, language=None, prompt=None, on_progress=None):  # type: ignore[no-untyped-def]
         assert audio_path.exists()
         self.prompts.append(prompt)
         return self.segments
@@ -52,7 +55,7 @@ def test_push_to_talk_produces_a_preview_with_audio_evidence(tmp_path, monkeypat
     assert label.audio_path and Path(label.audio_path).exists()
     assert stt.prompts[0] and "Priya" in stt.prompts[0]  # personal vocabulary biases recognition
     c.labels.confirm(label.id)
-    owns = repo.query_claims(c.db.reader(), predicate="owns")[0]
+    owns = repo.query_claims(c.kdb, predicate="owns")[0]
     assert owns.subject_id == priya.id and owns.extractor.kind == "voice"
     assert c.labels.audio_path(label.id).exists()
 
@@ -67,9 +70,9 @@ def test_audio_file_is_transcribed_with_timestamps(tmp_path, files):
     c = make_container(tmp_path / "c", stt=stt)
     c.ingestion.add_root(str(audio))
     drain(c)
-    src = repo.list_sources(c.db.reader())[0]
+    src = repo.list_sources(c.kdb)[0]
     assert src.kind.value == "audio" and src.status.value == "indexed", src.error
-    chunks = repo.chunks_for_source(c.db.reader(), src.id)
+    chunks = repo.chunks_for_source(c.index.reader(), src.id)
     assert chunks[0].locator.kind == "time" and chunks[0].locator.end == 3.0
-    works = repo.query_claims(c.db.reader(), predicate="works_at")
+    works = repo.query_claims(c.kdb, predicate="works_at")
     assert works and works[0].evidence[0].locator.kind == "time"

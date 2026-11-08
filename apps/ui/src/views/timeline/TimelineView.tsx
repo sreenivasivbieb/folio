@@ -3,6 +3,8 @@
 import type { Claim } from "@folio/api-client";
 import { useTimeline } from "@/api/queries";
 import { TypeDot } from "@/components/Badges";
+import { EmptyState } from "@/components/EmptyState";
+import { Icon } from "@/components/Icon";
 import { ClaimRow, type EntityRef } from "@/features/claims/ClaimRow";
 import { useSourceNames } from "@/features/sources/useSourceNames";
 import { shortDate } from "@/lib/format";
@@ -17,8 +19,8 @@ export function TimelineView() {
   const focus = ui.use((s) => s.focusEntity);
   const { data } = useTimeline(focus);
   const sources = useSourceNames();
-  if (!focus) return <div className="empty">Select an entity (graph, search or card) to see its timeline.</div>;
-  if (!data) return <div className="empty">Loading…</div>;
+  if (!focus) return <EmptyState icon="clock" title="Pick an entity">Select a person, topic or project in the graph or with Ctrl K to see everything dated about it, in order.</EmptyState>;
+  if (!data) return <div className="empty-inline"><Icon name="loader" spin /></div>;
   const entities = data.entities as Record<string, EntityRef>;
   const months = new Map<string, Claim[]>();
   for (const item of data.items) {
@@ -29,12 +31,12 @@ export function TimelineView() {
     <div className="scroll">
       <div className="timeline">
         {data.entity && (
-          <h2 className="row" style={{ margin: "0 0 8px" }}>
-            <TypeDot type={data.entity.type} /> {data.entity.name}
-            <span className="muted small" style={{ fontWeight: 400 }}>{data.items.length} dated facts</span>
+          <h2 className="row" style={{ margin: "0 0 8px", fontSize: 20, letterSpacing: "-0.02em" }}>
+            <TypeDot type={data.entity.type} size={10} /> {data.entity.name}
+            <span className="muted small" style={{ fontWeight: 400 }}>· {data.items.length} dated facts</span>
           </h2>
         )}
-        {data.items.length === 0 && <div className="empty">No dated facts yet for this entity.</div>}
+        {data.items.length === 0 && <div className="callout"><Icon name="info" /><span>No dated facts about {data.entity?.name ?? "this entity"} yet.</span></div>}
         {[...months.entries()].map(([month, items]) => (
           <div key={month}>
             <div className="tl-month">{month}</div>

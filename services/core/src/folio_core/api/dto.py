@@ -238,6 +238,18 @@ class VoiceStatus(BaseModel):
     microphone_detail: str
     speech_model: str
     speech_available: bool
+    speech_downloadable: bool
+    speech_size_mb: int
+
+
+class LLMStatus(BaseModel):
+    configured: bool
+    provider: str | None = None
+    label: str | None = None
+    base_url: str | None = None
+    model: str | None = None
+    local: bool = True
+    key_hint: str | None = None  # "…a1b2" — the key itself is never returned
 
 
 class Status(BaseModel):
@@ -245,12 +257,42 @@ class Status(BaseModel):
     data_dir: str
     cloud_enabled: bool
     network_mode: Literal["local", "cloud"]
+    extractor: str
+    llm: LLMStatus
     providers: list[ProviderInfo]
     voice: VoiceStatus
     jobs: dict[str, int]
     counts: dict[str, int]
+    types: list[str]
     vector_backend: str
     supported_extensions: list[str]
+
+
+class PresetView(BaseModel):
+    id: str
+    label: str
+    base_url: str
+    needs_key: bool
+    key_url: str | None = None
+    suggested_models: list[str] = []
+
+
+class LLMSettingsView(BaseModel):
+    status: LLMStatus
+    presets: list[PresetView]
+
+
+class LLMSettingsBody(BaseModel):
+    provider: str
+    base_url: str
+    model: str
+    api_key: str | None = None  # None = keep the stored key; "" = remove it
+
+
+class ModelsBody(BaseModel):
+    provider: str
+    base_url: str
+    api_key: str | None = None  # optional: use before saving; else the stored key
 
 
 class SchemaView(BaseModel):

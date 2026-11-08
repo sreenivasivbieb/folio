@@ -8,8 +8,10 @@ exact page, region or second it came from.
 > Select files → speak labels → the system extracts entities and relations → you review and
 > correct them → corrections improve the next run.
 
-Originals are never modified, moved or copied. Everything runs on your machine; cloud models are
-opt-in per project, with a visible indicator.
+Originals are never modified, moved or copied. There are no fixed categories: people, topics,
+courses, contracts — whatever the AI or you name. Facts are extracted by an LLM you choose (bring
+your own key: OpenAI, OpenRouter, Qwen, Groq, any OpenAI-compatible router, or a local Ollama);
+nothing leaves your machine unless you pick a hosted model, and the top bar always shows which.
 
 ---
 
@@ -34,7 +36,7 @@ folio/
 │   └── core/             Python 3.12 + FastAPI "core service" (runs as the app's sidecar)
 │       ├── src/folio_core/
 │       │   ├── domain/       pure types & rules: claims, entities, fingerprints, schema, values
-│       │   ├── store/        SQLite: knowledge.db (durable) + index.db (disposable), migrations
+│       │   ├── store/        MongoDB knowledge store + SQLite index.db (disposable), migrations
 │       │   ├── ledger/       append-only event log → undo/redo, audit, provenance
 │       │   ├── knowledge/    every write to entities/claims (validation, merge, split, edit)
 │       │   ├── ingestion/    parser plugins, sandbox, chunker, hashing, folder watcher
@@ -44,7 +46,7 @@ folio/
 │       │   ├── query/        hybrid search, entity cards, view projections, review queue
 │       │   ├── jobs/         SQLite-backed resumable job queue + worker pool
 │       │   ├── export/       JSON / GraphML (lossless) · Markdown / CSV
-│       │   ├── providers/    LLM · embeddings · speech-to-text adapters + privacy gate
+│       │   ├── providers/    LLM router (BYOK) · embeddings · speech-to-text · secrets · privacy
 │       │   ├── realtime/     pub/sub feeding the SSE stream
 │       │   ├── api/          FastAPI routers (thin), DTOs, token/origin security
 │       │   ├── container.py  composition root — read this to see how it all fits
@@ -65,11 +67,13 @@ extraction, speech, query) → ledger/store → domain`. `domain/` imports nothi
 
 ## Quick start (development)
 
-Prerequisites: [uv](https://docs.astral.sh/uv/), Node 20.19+, and for the desktop shell a Rust
-toolchain plus the [Tauri system dependencies](https://tauri.app/start/prerequisites/).
+Prerequisites: [Docker](https://docs.docker.com/get-docker/) (for MongoDB),
+[uv](https://docs.astral.sh/uv/), Node 20.19+, and for the desktop shell a Rust toolchain plus
+the [Tauri system dependencies](https://tauri.app/start/prerequisites/).
 Optional: `ffmpeg` (audio/video) and `tesseract` (OCR for scans and images).
 
 ```bash
+docker compose up -d                         # MongoDB (single-node replica set, localhost only)
 npm install                                  # JS workspaces (ui, api-client, desktop CLI)
 (cd services/core && uv sync)                # Python core (pins Python 3.12)
 
@@ -81,7 +85,11 @@ npm run dev:core                             # core on 127.0.0.1:8765, token "de
 npm run dev:ui                               # http://127.0.0.1:1420
 ```
 
-Voice needs the optional speech extra (downloads a Whisper model once, then works offline):
+Then open **Settings → AI model**, pick a provider, paste your API key, load the model list and
+save. Without a model, Folio still indexes and searches everything, but finds very few facts.
+
+Voice needs the optional speech extra; the Whisper model is downloaded only when you click
+**Settings → Voice → Download** (then it works offline):
 
 ```bash
 cd services/core && uv sync --extra speech   # faster-whisper + sounddevice
@@ -113,15 +121,15 @@ The core reads `FOLIO_*` environment variables (see `services/core/src/folio_cor
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `FOLIO_DATA_DIR` | OS app-data dir | where `knowledge.db`, `index.db`, label audio and models live |
-| `FOLIO_EXTRACTOR` | `rules` | `rules` (offline, deterministic) or `llm` |
-| `FOLIO_LLM` | `fake` | `fake` or `openai` (any OpenAI-compatible endpoint: Ollama, llama.cpp, vLLM, cloud) |
-| `FOLIO_LLM_BASE_URL` / `FOLIO_LLM_MODEL` | `http://127.0.0.1:11434/v1` / `qwen2.5:7b-instruct` | LLM endpoint & model |
+| `FOLIO_DATA_DIR` | OS app-data dir | `index.db`, label audio, speech models, `secrets.json` (API keys, mode 0600) |
+| `FOLIO_MONGO_URI` | `mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true` | knowledge store |
+| `FOLIO_MONGO_DB` | `folio` | database name (one per project) |
 | `FOLIO_EMBEDDER` | `hashing` | `hashing` (zero download) or `fastembed` (ONNX, `--extra embeddings`) |
 | `FOLIO_STT` / `FOLIO_STT_MODEL` | `auto` / `small` | speech-to-text (`none` disables) |
 
-A non-loopback LLM endpoint counts as *cloud* and is refused until the project opts in (top-bar
-privacy badge).
+The LLM is not an environment variable: it is chosen per project in Settings (stored in MongoDB,
+key in `secrets.json`). A hosted (non-loopback) endpoint counts as *cloud*: choosing it is the project's opt-in, and the
+top bar shows it at all times.
 
 ## Status
 

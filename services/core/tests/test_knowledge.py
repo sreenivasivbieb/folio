@@ -13,7 +13,7 @@ def _rel(k, s, p, o):
 
 
 def test_merge_moves_claims_adds_aliases_and_undoes_cleanly(container):
-    k, conn = container.knowledge, container.db.reader()
+    k, conn = container.knowledge, container.kdb
     a = k.create_entity("Organization", "Acme Corp")
     b = k.create_entity("Organization", "ACME Corporation")
     priya = k.create_entity("Person", "Priya")
@@ -34,7 +34,7 @@ def test_merge_moves_claims_adds_aliases_and_undoes_cleanly(container):
 
 
 def test_split_moves_selected_claims(container):
-    k, conn = container.knowledge, container.db.reader()
+    k, conn = container.knowledge, container.kdb
     jordan = k.create_entity("Person", "Jordan")
     acme = k.create_entity("Organization", "Acme")
     beta = k.create_entity("Organization", "Beta")
@@ -44,21 +44,29 @@ def test_split_moves_selected_claims(container):
     assert repo.get_claim(conn, c1).subject_id == other.id
 
 
-def test_schema_guards_claims(container):
+def test_open_schema_accepts_any_type_and_predicate_but_parses_hinted_values(container):
     k = container.knowledge
-    priya = k.create_entity("Person", "Priya")
-    project = k.create_entity("Project", "Atlas")
-    with pytest.raises(InvalidInput):
-        _rel(k, project.id, "works_at", priya.id)  # Project cannot work at a Person
-    with pytest.raises(InvalidInput):
+    ship = k.create_entity("spaceship", "Enterprise")  # no fixed categories
+    assert ship.type == "Spaceship"
+    assert k.create_entity("person", "Priya").type == "Person"  # reuses the existing spelling
+    crew = k.create_entity("Crew Member", "Spock")
+    cid = k.add_claim(subject_id=crew.id, predicate="Serves On", object_id=ship.id,
+                      status=ClaimStatus.VERIFIED, extractor=Extractor(kind="user"))
+    claim = repo.get_claim(container.kdb, cid)
+    assert claim.predicate == "serves_on" and claim.kind.value == "relation"
+    k.add_claim(subject_id=ship.id, predicate="registry", value={"code": "NCC-1701"},
+                status=ClaimStatus.VERIFIED, extractor=Extractor(kind="user"))  # any JSON value
+
+    priya = repo.search_entities(container.kdb, "Priya")[0]
+    with pytest.raises(InvalidInput):  # the hints say Person.email is an email
         k.add_claim(subject_id=priya.id, predicate="email", value="not-an-email",
                     status=ClaimStatus.VERIFIED, extractor=Extractor(kind="user"))
     with pytest.raises(InvalidInput):
-        k.create_entity("Spaceship", "Enterprise")
+        k.create_entity("Person", "   ")
 
 
 def test_rejecting_entity_rejects_its_proposed_claims(container):
-    k, conn = container.knowledge, container.db.reader()
+    k, conn = container.knowledge, container.kdb
     ghost = k.create_entity("Person", "Ghost")
     acme = k.create_entity("Organization", "Acme")
     cid = k.add_claim(subject_id=ghost.id, predicate="works_at", object_id=acme.id,
@@ -70,7 +78,7 @@ def test_rejecting_entity_rejects_its_proposed_claims(container):
     assert repo.get_claim(conn, cid).status == ClaimStatus.REJECTED
 
 
-def test_schema_update_creates_new_version(container):
+def test_hints_update_creates_new_version(container):
     v1, schema = container.knowledge.schema()
     schema.entity_types["Invoice"] = schema.entity_types["Document"].model_copy()
     v2 = container.knowledge.update_schema(schema)

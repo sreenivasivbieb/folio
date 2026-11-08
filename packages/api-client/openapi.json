@@ -90,6 +90,199 @@
         }
       }
     },
+    "/api/llm": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Get Llm",
+        "operationId": "get_llm_api_llm_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LLMSettingsView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Put Llm",
+        "description": "Choose the project's LLM. A hosted (non-loopback) endpoint is an explicit cloud opt-in.",
+        "operationId": "put_llm_api_llm_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LLMSettingsBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LLMSettingsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Delete Llm",
+        "description": "Back to the offline rule extractor (the stored key is kept for later).",
+        "operationId": "delete_llm_api_llm_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LLMSettingsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/llm/models": {
+      "post": {
+        "tags": [
+          "system"
+        ],
+        "summary": "List Models",
+        "description": "The provider's live model list (so the user never has to guess model ids).",
+        "operationId": "list_models_api_llm_models_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelsBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array",
+                  "title": "Response List Models Api Llm Models Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/llm/test": {
+      "post": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Test Llm",
+        "description": "A real tiny request with the saved settings: proves key, model and JSON mode work.",
+        "operationId": "test_llm_api_llm_test_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/extract/all": {
+      "post": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Extract All",
+        "description": "Re-run extraction on every indexed file (e.g. after choosing an LLM). Cached = free.",
+        "operationId": "extract_all_api_extract_all_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/speech/download": {
+      "post": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Download Speech",
+        "description": "Explicitly fetch the speech model (the only time Folio downloads a model).",
+        "operationId": "download_speech_api_speech_download_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/metrics/acceptance": {
       "get": {
         "tags": [
@@ -186,6 +379,7 @@
           "sources"
         ],
         "summary": "Remove Root",
+        "description": "Stop tracking a folder: its files leave the list and the index; knowledge is kept.",
         "operationId": "remove_root_api_roots__root_id__delete",
         "parameters": [
           {
@@ -515,7 +709,7 @@
           "sources"
         ],
         "summary": "Rebuild Index",
-        "description": "Delete index.db and re-index everything. User knowledge (knowledge.db) is untouched.",
+        "description": "Empty index.db and re-index everything. Knowledge (MongoDB) is untouched.",
         "operationId": "rebuild_index_api_index_rebuild_post",
         "responses": {
           "200": {
@@ -4104,6 +4298,133 @@
         ],
         "title": "Job"
       },
+      "LLMSettingsBody": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "base_url": {
+            "type": "string",
+            "title": "Base Url"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "base_url",
+          "model"
+        ],
+        "title": "LLMSettingsBody"
+      },
+      "LLMSettingsView": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/LLMStatus"
+          },
+          "presets": {
+            "items": {
+              "$ref": "#/components/schemas/PresetView"
+            },
+            "type": "array",
+            "title": "Presets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "presets"
+        ],
+        "title": "LLMSettingsView"
+      },
+      "LLMStatus": {
+        "properties": {
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "local": {
+            "type": "boolean",
+            "title": "Local",
+            "default": true
+          },
+          "key_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Hint"
+          }
+        },
+        "type": "object",
+        "required": [
+          "configured"
+        ],
+        "title": "LLMStatus"
+      },
       "Label": {
         "properties": {
           "id": {
@@ -4368,6 +4689,35 @@
         ],
         "title": "MergeSuggestion"
       },
+      "ModelsBody": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "base_url": {
+            "type": "string",
+            "title": "Base Url"
+          },
+          "api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "base_url"
+        ],
+        "title": "ModelsBody"
+      },
       "Ok": {
         "properties": {
           "ok": {
@@ -4433,6 +4783,53 @@
           "score"
         ],
         "title": "Passage"
+      },
+      "PresetView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "base_url": {
+            "type": "string",
+            "title": "Base Url"
+          },
+          "needs_key": {
+            "type": "boolean",
+            "title": "Needs Key"
+          },
+          "key_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Url"
+          },
+          "suggested_models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Suggested Models",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "base_url",
+          "needs_key"
+        ],
+        "title": "PresetView"
       },
       "ProviderInfo": {
         "properties": {
@@ -4743,7 +5140,8 @@
           "indexed",
           "failed",
           "missing",
-          "forgotten"
+          "forgotten",
+          "removed"
         ],
         "title": "SourceStatus"
       },
@@ -4801,6 +5199,13 @@
             ],
             "title": "Network Mode"
           },
+          "extractor": {
+            "type": "string",
+            "title": "Extractor"
+          },
+          "llm": {
+            "$ref": "#/components/schemas/LLMStatus"
+          },
           "providers": {
             "items": {
               "$ref": "#/components/schemas/ProviderInfo"
@@ -4825,6 +5230,13 @@
             "type": "object",
             "title": "Counts"
           },
+          "types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Types"
+          },
           "vector_backend": {
             "type": "string",
             "title": "Vector Backend"
@@ -4843,10 +5255,13 @@
           "data_dir",
           "cloud_enabled",
           "network_mode",
+          "extractor",
+          "llm",
           "providers",
           "voice",
           "jobs",
           "counts",
+          "types",
           "vector_backend",
           "supported_extensions"
         ],
@@ -5119,6 +5534,14 @@
           "speech_available": {
             "type": "boolean",
             "title": "Speech Available"
+          },
+          "speech_downloadable": {
+            "type": "boolean",
+            "title": "Speech Downloadable"
+          },
+          "speech_size_mb": {
+            "type": "integer",
+            "title": "Speech Size Mb"
           }
         },
         "type": "object",
@@ -5127,7 +5550,9 @@
           "microphone",
           "microphone_detail",
           "speech_model",
-          "speech_available"
+          "speech_available",
+          "speech_downloadable",
+          "speech_size_mb"
         ],
         "title": "VoiceStatus"
       },

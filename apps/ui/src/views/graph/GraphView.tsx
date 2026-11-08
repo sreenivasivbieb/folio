@@ -11,6 +11,8 @@ import Sigma from "sigma";
 import { useGraph, useKnowledgeActions } from "@/api/queries";
 import { predicateLabel } from "@/lib/format";
 import { type SchemaDef, typeColor, useSchemaDef } from "@/lib/schema";
+import { EmptyState } from "@/components/EmptyState";
+import { Icon } from "@/components/Icon";
 import { selectClaims, selectEntity, ui } from "@/state/selection";
 
 function cssVar(name: string): string {
@@ -43,7 +45,7 @@ function buildGraph(data: GraphData, schema: SchemaDef | null): Graph {
     g.addDirectedEdgeWithKey(e.id, e.source, e.target, {
       label: predicateLabel(e.predicate),
       size: proposed ? 1 : 2.2,
-      color: e.status === "rejected" ? alpha("#c0392b", 0.5) : proposed ? alpha("#b26b00", 0.45) : cssVar("--muted"),
+      color: e.status === "rejected" ? alpha("#c0392b", 0.5) : proposed ? alpha("#b26b00", 0.45) : cssVar("--text-3"),
       type: "arrow",
       status: e.status,
     });
@@ -70,6 +72,7 @@ export function GraphView() {
   const container = useRef<HTMLDivElement>(null);
   const sigma = useRef<Sigma | null>(null);
   const selectedRef = useRef<Set<string>>(new Set());
+  const hoveredRef = useRef<string | null>(null);
   const actions = useKnowledgeActions();
 
   const graph = useMemo(() => (data ? buildGraph(data, schema) : null), [data, schema]);
@@ -77,15 +80,23 @@ export function GraphView() {
   useEffect(() => {
     if (!graph || !container.current) return;
     const renderer = new Sigma(graph, container.current, {
-      renderEdgeLabels: true,
+      // Edge labels only while the graph is small enough to read them; hover shows the rest.
+      renderEdgeLabels: graph.size <= 60,
+      labelDensity: 0.6,
+      labelGridCellSize: 110,
       enableEdgeEvents: true,
       defaultEdgeType: "arrow",
-      labelColor: { color: cssVar("--text") },
-      edgeLabelColor: { color: cssVar("--muted") },
-      labelRenderedSizeThreshold: 6,
+      // Sigma draws hover/selected labels on a white box: those get dark text (labelColor
+      // attribute below); all other labels use the theme's text colour.
+      labelColor: { attribute: "labelColor", color: cssVar("--text") },
+      edgeLabelColor: { color: cssVar("--text-3") },
+      labelRenderedSizeThreshold: 7,
       stagePadding: 70, // keep nodes clear of the legend overlay
-      nodeReducer: (node, attrs) =>
-        selectedRef.current.has(node) ? { ...attrs, highlighted: true, zIndex: 1 } : attrs,
+      nodeReducer: (node, attrs) => {
+        if (selectedRef.current.has(node)) return { ...attrs, highlighted: true, zIndex: 1, labelColor: "#18181b" };
+        if (hoveredRef.current === node) return { ...attrs, labelColor: "#18181b" };
+        return attrs;
+      },
       edgeReducer: (edge, attrs) => (selectedRef.current.has(edge) ? { ...attrs, size: 4, color: cssVar("--accent") } : attrs),
     });
     renderer.on("clickNode", ({ node, event }) => {
@@ -98,6 +109,8 @@ export function GraphView() {
       setNeighbourhood(true);
     });
     renderer.on("clickEdge", ({ edge }) => selectClaims([edge]));
+    renderer.on("enterNode", ({ node }) => { hoveredRef.current = node; });
+    renderer.on("leaveNode", () => { hoveredRef.current = null; });
     renderer.on("clickStage", () => ui.set({ selection: { kind: "none" } }));
     sigma.current = renderer;
     return () => {
@@ -117,25 +130,31 @@ export function GraphView() {
   return (
     <div className="view" style={{ display: "flex", flexDirection: "column" }}>
       <div className="toolbar">
-        <div className="row">
-          <button type="button" className={`tab`} aria-selected={!neighbourhood} onClick={() => setNeighbourhood(false)}>Everything</button>
-          <button type="button" className={`tab`} aria-selected={neighbourhood} disabled={!focus} onClick={() => setNeighbourhood(true)}>Around selection</button>
+        <div className="seg">
+          <button type="button" aria-selected={!neighbourhood} onClick={() => setNeighbourhood(false)}>Everything</button>
+          <button type="button" aria-selected={neighbourhood} disabled={!focus} onClick={() => setNeighbourhood(true)}>Around selection</button>
         </div>
         {neighbourhood && (
           <select className="input" value={depth} onChange={(e) => setDepth(Number(e.target.value))} aria-label="Depth">
             {[1, 2, 3].map((d) => <option key={d} value={d}>{d} hop{d > 1 ? "s" : ""}</option>)}
           </select>
         )}
-        <label className="row small"><input type="checkbox" checked={mentions} onChange={(e) => setMentions(e.target.checked)} /> document mentions</label>
-        <label className="row small"><input type="checkbox" checked={rejected} onChange={(e) => setRejected(e.target.checked)} /> rejected</label>
+        <label className="row small text-2"><input type="checkbox" checked={mentions} onChange={(e) => setMentions(e.target.checked)} /> Show files</label>
+        <label className="row small text-2"><input type="checkbox" checked={rejected} onChange={(e) => setRejected(e.target.checked)} /> Show rejected</label>
         <span className="spacer" />
         {selectedEntities.length === 2 && <ConnectOrMerge a={selectedEntities[0]} b={selectedEntities[1]} graph={graph} />}
-        <span className="small muted">{data ? `${data.nodes.length} entities · ${data.edges.length} relations` : ""}</span>
+        <span className="small muted">{data ? `${data.nodes.length} entities · ${data.edges.length} links` : ""}</span>
       </div>
       <div className="view">
         <div ref={container} className="graph-canvas" />
-        {isLoading && <div className="empty">Loading graph…</div>}
-        {data && data.nodes.length === 0 && <div className="empty">No entities yet. Add a folder, then label files by voice or review proposals.</div>}
+        {isLoading && <div className="empty-inline"><Icon name="loader" spin /></div>}
+        {data && data.nodes.length === 0 && (
+          <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
+            <EmptyState icon="graph" title="No entities yet">
+              People, topics and organisations appear here as bubbles once facts are extracted — connect an AI model in Settings, or select a file and describe it below.
+            </EmptyState>
+          </div>
+        )}
         {selectedEdge && graph && (
           <EdgePanel
             claimId={selectedEdge}
@@ -148,12 +167,12 @@ export function GraphView() {
             schema={schema}
           />
         )}
-        <div className="legend">
-          {Object.entries(schema?.entity_types ?? {}).map(([t, def]) => (
-            <span key={t} className="row"><span className="dot" style={{ background: def.color }} />{t}</span>
+        {!!data?.nodes.length && <div className="legend">
+          {Array.from(new Set(data.nodes.map((n) => n.type))).sort().map((t) => (
+            <span key={t} className="row"><span className="dot" style={{ background: typeColor(schema, t) }} />{t}</span>
           ))}
-          <span className="muted">— solid = verified, faded = proposed</span>
-        </div>
+          <span className="muted">solid = confirmed · faded = proposed</span>
+        </div>}
       </div>
     </div>
   );
@@ -176,7 +195,7 @@ function EdgePanel({ claimId, label, status, sourceType, targetType, onDone, act
     <div className="floating stack">
       <strong>Relation: {label}</strong>
       <span className={`badge ${status}`} style={{ alignSelf: "flex-start" }}>{status}</span>
-      <label className="small muted">Re-type</label>
+      <label className="small muted">Change relation</label>
       <select
         className="input"
         value=""
@@ -189,8 +208,8 @@ function EdgePanel({ claimId, label, status, sourceType, targetType, onDone, act
         {options.map((o) => <option key={o} value={o}>{predicateLabel(o)}</option>)}
       </select>
       <div className="row">
-        <button type="button" className="btn small ok" onClick={() => { actions.setClaimStatus.mutate({ ids: [claimId], status: "verified" }); onDone(); }}>Verify</button>
-        <button type="button" className="btn small bad" onClick={() => { actions.setClaimStatus.mutate({ ids: [claimId], status: "rejected" }); onDone(); }}>Delete (reject)</button>
+        <button type="button" className="btn sm success" onClick={() => { actions.setClaimStatus.mutate({ ids: [claimId], status: "verified" }); onDone(); }}><Icon name="check" size={13} /> Confirm</button>
+        <button type="button" className="btn sm danger" onClick={() => { actions.setClaimStatus.mutate({ ids: [claimId], status: "rejected" }); onDone(); }}><Icon name="x" size={13} /> Reject</button>
       </div>
     </div>
   );
@@ -219,7 +238,7 @@ function ConnectOrMerge({ a, b, graph }: { a: string; b: string; graph: Graph | 
         {rels.map(([n]) => <option key={n} value={n}>{predicateLabel(n)} {nb}</option>)}
       </select>
       {ta === tb && (
-        <button type="button" className="btn small" onClick={() => actions.merge.mutate({ keep: a, merge: b })}>
+        <button type="button" className="btn sm" onClick={() => actions.merge.mutate({ keep: a, merge: b })}>
           Merge “{nb}” into “{na}”
         </button>
       )}

@@ -5,6 +5,7 @@ import mimetypes
 from fastapi import APIRouter
 from fastapi.responses import FileResponse
 
+from ...domain.errors import NotFound
 from ...domain.models import Chunk, Root, Source
 from ...store import repo
 from ..deps import C
@@ -29,8 +30,10 @@ def add_root(body: AddRoot, c: C) -> Root:
 
 @router.delete("/roots/{root_id}", response_model=Ok)
 def remove_root(root_id: str, c: C) -> Ok:
-    c.ingestion.remove_root(root_id)
-    return Ok()
+    """Stop tracking a folder: its files leave the list and the index; knowledge is kept."""
+    n = c.ingestion.remove_root(root_id)
+    c.watcher.sync()
+    return Ok(detail=f"{n} file(s) no longer tracked")
 
 
 @router.post("/rescan", response_model=Ok)
@@ -42,30 +45,26 @@ def rescan(c: C) -> Ok:
 
 @router.get("/sources", response_model=list[Source])
 def list_sources(c: C, root_id: str | None = None) -> list[Source]:
-    return repo.list_sources(c.db.reader(), root_id)
+    return repo.list_sources(c.kdb, root_id)
 
 
 @router.get("/sources/{source_id}", response_model=SourceDetail)
 def get_source(source_id: str, c: C) -> SourceDetail:
-    conn = c.db.reader()
-    src = repo.get_source(conn, source_id)
+    src = repo.get_source(c.kdb, source_id)
     if src is None:
-        from ...domain.errors import NotFound
-
         raise NotFound(f"source {source_id} not found")
-    n = conn.execute("SELECT COUNT(*) FROM ix.chunks WHERE source_id = ?", (source_id,)).fetchone()[0]
+    n = c.index.reader().execute("SELECT COUNT(*) FROM chunks WHERE source_id = ?", (source_id,)).fetchone()[0]
     return SourceDetail(source=src, chunks=n)
 
 
 @router.get("/sources/{source_id}/chunks", response_model=list[Chunk])
 def source_chunks(source_id: str, c: C) -> list[Chunk]:
-    return repo.chunks_for_source(c.db.reader(), source_id)
+    return repo.chunks_for_source(c.index.reader(), source_id)
 
 
 @router.post("/sources/{source_id}/reindex", response_model=Ok)
 def reindex(source_id: str, c: C) -> Ok:
-    with c.db.write() as conn:
-        conn.execute("UPDATE sources SET indexed_hash = NULL, status = 'pending' WHERE id = ?", (source_id,))
+    c.kdb["sources"].update_one({"_id": source_id}, {"$set": {"indexed_hash": None, "status": "pending", "error": None}})
     c.queue.enqueue("index_source", {"source_id": source_id}, dedupe_key=f"index:{source_id}", priority=10)
     c.workers.notify()
     return Ok()
@@ -87,15 +86,11 @@ def source_file(source_id: str, c: C) -> FileResponse:
 
 @router.post("/index/rebuild", response_model=Ok)
 def rebuild_index(c: C) -> Ok:
-    """Delete index.db and re-index everything. User knowledge (knowledge.db) is untouched."""
-    c.db.reset_index()
-    with c.db.write() as conn:
-        conn.execute("UPDATE sources SET indexed_hash = NULL, status = 'pending' WHERE status != 'forgotten'")
-    from ...store.vectors import VectorIndex
-
-    vectors = VectorIndex(c.db, c.providers.embedder.dim, c.providers.embedder.model_id)
-    c.ingestion.vectors = vectors
-    c.search.vectors = vectors
+    """Empty index.db and re-index everything. Knowledge (MongoDB) is untouched."""
+    c.index.reset()
+    c.vectors.ensure()
+    c.kdb["sources"].update_many({"status": {"$nin": repo.HIDDEN_SOURCE_STATUSES}},
+                                 {"$set": {"indexed_hash": None, "status": "pending"}})
     n = c.ingestion.rescan_all()
     c.workers.notify()
     return Ok(detail=f"{n} file(s) queued")

@@ -16,11 +16,11 @@ from .conftest import drain
 def test_every_chunk_has_a_locator(container, files):
     container.ingestion.add_root(str(files))
     drain(container)
-    conn = container.db.reader()
+    conn = container.kdb
     by_kind = {}
     for src in repo.list_sources(conn):
         assert src.status == SourceStatus.INDEXED, (src.path, src.error)
-        for ch in repo.chunks_for_source(conn, src.id):
+        for ch in repo.chunks_for_source(container.index.reader(), src.id):
             by_kind.setdefault(src.kind.value, []).append(ch.locator)
     assert {"pdf", "markdown", "subtitle", "docx"} <= set(by_kind)
     pdf = by_kind["pdf"][0]
@@ -34,7 +34,7 @@ def test_every_chunk_has_a_locator(container, files):
 def test_unchanged_file_costs_nothing_changed_file_reindexes(container, files):
     container.ingestion.add_root(str(files))
     drain(container)
-    src = next(s for s in repo.list_sources(container.db.reader()) if s.path.endswith(".md"))
+    src = next(s for s in repo.list_sources(container.kdb) if s.path.endswith(".md"))
 
     # Force a re-check of an unchanged file: content hash matches -> no parse, no extraction.
     extracts = lambda: sum(j.kind == "extract_source" for j in container.queue.list(limit=1000))  # noqa: E731
@@ -48,7 +48,7 @@ def test_unchanged_file_costs_nothing_changed_file_reindexes(container, files):
     path.write_text(path.read_text() + "\nBob Stone works at Initech.\n")
     container.ingestion.scan_path(path)
     drain(container)
-    texts = " ".join(c.text for c in repo.chunks_for_source(container.db.reader(), src.id))
+    texts = " ".join(c.text for c in repo.chunks_for_source(container.index.reader(), src.id))
     assert "Initech" in texts
 
 
@@ -57,7 +57,7 @@ def test_parser_crash_is_contained_and_reported(container, tmp_path):
     bad.write_bytes(b"%PDF-1.4 this is not really a pdf")
     container.ingestion.add_root(str(bad))
     drain(container)
-    src = repo.list_sources(container.db.reader())[0]
+    src = repo.list_sources(container.kdb)[0]
     assert src.status == SourceStatus.FAILED
     job = container.queue.list("failed")[0]
     assert "parser exited" in job.error
@@ -83,7 +83,7 @@ def test_subtitles_and_chunker():
 def test_forget_file_removes_unverified_and_flags_verified(container, files):
     container.ingestion.add_root(str(files))
     drain(container)
-    conn = container.db.reader()
+    conn = container.kdb
     src = next(s for s in repo.list_sources(conn) if s.path.endswith(".md"))
     claims = repo.query_claims(conn, source_id=src.id)
     only_here = [c for c in claims if {e.source_id for e in c.evidence} == {src.id}]
@@ -92,7 +92,7 @@ def test_forget_file_removes_unverified_and_flags_verified(container, files):
 
     stats = container.ingestion.forget_source(src.id)
     assert stats["claims_flagged"] == 1 and stats["claims_removed"] >= 1
-    assert repo.chunks_for_source(conn, src.id) == []
+    assert repo.chunks_for_source(container.index.reader(), src.id) == []
     flagged = repo.get_claim(conn, keep.id)
     assert flagged.needs_review and flagged.status.value == "verified"
     # a forgotten file is never re-indexed by later scans

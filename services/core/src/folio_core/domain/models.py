@@ -2,7 +2,10 @@
 
 The unit of knowledge is the **claim**: one statement about an entity, with evidence, time and
 status. Relations are claims whose object is another entity, so the graph, timeline and swimlane
-views are projections of the same rows.
+views are projections of the same documents.
+
+Open schema: ``Entity.type`` and ``Claim.predicate`` are free strings and ``Claim.value`` is any
+JSON value. Only the trust envelope (status, provenance, evidence) has a fixed shape.
 """
 
 from __future__ import annotations
@@ -30,7 +33,8 @@ class SourceStatus(StrEnum):
     INDEXED = "indexed"
     FAILED = "failed"
     MISSING = "missing"
-    FORGOTTEN = "forgotten"
+    FORGOTTEN = "forgotten"  # the user asked to forget it: never re-indexed
+    REMOVED = "removed"  # its folder was removed from Folio: knowledge kept, index dropped
 
 
 class EntityStatus(StrEnum):

@@ -181,15 +181,16 @@ mod tests {
         out
     }
 
-    /// Launches the real core (via `uv run` against this checkout) and talks to it.
-    /// Run with: `cargo test -- --ignored` (needs `uv`).
+    /// Launches the real core (this checkout's venv) and talks to it.
+    /// Run with: `cargo test -- --ignored` (needs `uv sync` and `docker compose up -d`).
     #[test]
-    #[ignore = "starts the Python core; needs uv"]
+    #[ignore = "starts the Python core; needs the venv and MongoDB"]
     fn starts_core_and_enforces_the_session_token() {
         let data = std::env::temp_dir().join(format!("folio-sidecar-test-{}", std::process::id()));
         std::env::set_var("FOLIO_DATA_DIR", &data);
         std::env::set_var("FOLIO_STT", "none");
         std::env::set_var("FOLIO_WATCH", "0");
+        std::env::set_var("FOLIO_MONGO_DB", "folio_sidecar_test"); // never touch the real project
 
         let sidecar = Sidecar::default();
         sidecar.start();

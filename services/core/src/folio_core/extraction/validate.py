@@ -1,10 +1,8 @@
-"""Schema and evidence checks on extractor output.
+"""Trust checks on extractor output (open schema: types and predicates are free-form).
 
-Two guarantees matter most:
-1. Every type/predicate exists in the active schema.
-2. Every claim's ``quote`` is literally present in the chunk text. This is the main defence against
-   invented facts *and* against prompt injection: whatever text in a file says, the model can only
-   produce claims that point at real spans of that file.
+The guarantee that matters most: every claim's ``quote`` is literally present in the chunk text.
+That is the main defence against invented facts *and* against prompt injection — whatever text in
+a file says, the model can only produce claims that point at real spans of that file.
 """
 
 from __future__ import annotations
@@ -15,25 +13,22 @@ from ..domain.schema import MENTIONED, MENTIONS, REPRESENTED_BY, SchemaDef
 from .types import CandidateClaim, ExtractionOutput
 
 _WS = re.compile(r"\s+")
+MAX_NAME = 120
 
 
 def _norm(s: str) -> str:
     return _WS.sub(" ", s).strip().lower()
 
 
-def validate_output(out: ExtractionOutput, schema: SchemaDef, text: str) -> tuple[ExtractionOutput, list[str]]:
-    """Return (output with only valid items, list of problems)."""
+def validate_output(out: ExtractionOutput, schema: SchemaDef | None, text: str) -> tuple[ExtractionOutput, list[str]]:
+    """Return (output with only valid items, list of problems). ``schema`` is only a hint."""
+    del schema  # open schema: hints never reject anything
     problems: list[str] = []
     haystack = _norm(text)
-    entities = []
-    for e in out.entities:
-        if e.type not in schema.entity_types:
-            problems.append(f"entity '{e.name}': unknown type '{e.type}'")
-        else:
-            entities.append(e)
+    entities = [e for e in out.entities if e.name.strip() and e.type.strip() and len(e.name) <= MAX_NAME]
     claims: list[CandidateClaim] = []
     for c in out.claims:
-        err = _claim_problem(c, schema, haystack)
+        err = _claim_problem(c, haystack)
         if err:
             problems.append(f"claim '{c.subject} {c.predicate}': {err}")
         else:
@@ -41,23 +36,21 @@ def validate_output(out: ExtractionOutput, schema: SchemaDef, text: str) -> tupl
     return ExtractionOutput(entities=entities, claims=claims), problems
 
 
-def _claim_problem(c: CandidateClaim, schema: SchemaDef, haystack: str) -> str | None:
-    if c.subject_type not in schema.entity_types:
-        return f"unknown subject type '{c.subject_type}'"
+def _claim_problem(c: CandidateClaim, haystack: str) -> str | None:
+    if not c.subject.strip() or len(c.subject) > MAX_NAME:
+        return "missing or overlong subject"
+    if not c.subject_type.strip() or not c.predicate.strip():
+        return "missing subject type or predicate"
     if not c.quote.strip() or _norm(c.quote) not in haystack:
         return "quote is not an exact span of the source text"
-    if c.predicate in schema.relation_types or c.predicate == MENTIONS:
-        if not c.object or not c.object_type:
-            return "relation without an object"
-        if c.object_type not in schema.entity_types:
-            return f"unknown object type '{c.object_type}'"
-        if not schema.relation_allows(c.predicate, c.subject_type, c.object_type):
-            return f"'{c.predicate}' not allowed from {c.subject_type} to {c.object_type}"
+    if c.object is not None or c.object_type is not None or c.predicate == MENTIONS:
+        if not (c.object or "").strip() or not (c.object_type or "").strip():
+            return "relation without an object name and type"
+        if len(c.object or "") > MAX_NAME:
+            return "overlong object name"
         return None
     if c.predicate in (MENTIONED, REPRESENTED_BY):
         return None if c.value else "attribute without a value"
-    if schema.attribute(c.subject_type, c.predicate) is None:
-        return f"{c.subject_type} has no attribute '{c.predicate}'"
-    if c.value is None:
+    if c.value is None or not str(c.value).strip():
         return "attribute without a value"
     return None

@@ -1,86 +1,118 @@
 /**
- * Three panes + voice bar:
- *   left   — sources / review queue / jobs / history
- *   main   — the four views over one data model (graph, swimlane, timeline, table)
- *   right  — evidence viewer, file viewer, or the selected entity's card
- *   bottom — push-to-talk and typed labels
+ * App shell:
+ *   sidebar   — Library / Review / Activity, plus AI-model and voice status
+ *   main      — the four views over one data model (graph, swimlane, timeline, table)
+ *   inspector — evidence viewer, file viewer, or the selected entity's card
+ *   composer  — push-to-talk and typed labels
  */
-import { useClaim, useReview } from "@/api/queries";
+import { useClaim, useJobs, useStatus } from "@/api/queries";
 import { useCoreEvents } from "@/api/events";
+import { EmptyState } from "@/components/EmptyState";
+import { Icon, type IconName } from "@/components/Icon";
 import { EntityCardPanel } from "@/features/entities/EntityCardPanel";
 import { EvidenceViewer, SourceViewer } from "@/features/evidence/EvidenceViewer";
-import { ExportMenu } from "@/features/export/ExportMenu";
-import { HistoryPanel } from "@/features/history/HistoryPanel";
-import { JobsPanel } from "@/features/jobs/JobsPanel";
-import { ReviewPanel } from "@/features/review/ReviewPanel";
-import { SchemaEditor } from "@/features/schema/SchemaEditor";
 import { SearchPalette } from "@/features/search/SearchPalette";
-import { SourcesPanel } from "@/features/sources/SourcesPanel";
+import { SettingsModal } from "@/features/settings/SettingsModal";
+import { useAddRoot } from "@/features/sources/SourcesPanel";
 import { VoiceBar } from "@/features/voice/VoiceBar";
-import { type LeftTab, ui, type ViewName } from "@/state/selection";
+import { openSettings, ui, type ViewName } from "@/state/selection";
 import { toasts } from "@/state/toast";
 import { GraphView } from "@/views/graph/GraphView";
 import { SwimlaneView } from "@/views/swimlane/SwimlaneView";
 import { TableView } from "@/views/table/TableView";
 import { TimelineView } from "@/views/timeline/TimelineView";
+import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { useShortcuts } from "./useShortcuts";
 
-const VIEWS: { id: ViewName; label: string }[] = [
-  { id: "graph", label: "Graph" },
-  { id: "swimlane", label: "Swimlane" },
-  { id: "timeline", label: "Timeline" },
-  { id: "table", label: "Table" },
+const VIEWS: { id: ViewName; label: string; icon: IconName }[] = [
+  { id: "graph", label: "Graph", icon: "graph" },
+  { id: "swimlane", label: "Swimlane", icon: "lanes" },
+  { id: "timeline", label: "Timeline", icon: "clock" },
+  { id: "table", label: "Table", icon: "table" },
 ];
 
-function LeftPanel() {
-  const tab = ui.use((s) => s.leftTab);
-  const { data: review } = useReview();
-  const reviewCount = review ? review.total_proposed + review.merge_suggestions.length + review.flagged.length : 0;
-  const tabs: { id: LeftTab; label: string; count?: number }[] = [
-    { id: "sources", label: "Files" },
-    { id: "review", label: "Review", count: reviewCount },
-    { id: "jobs", label: "Jobs" },
-    { id: "history", label: "History" },
-  ];
-  return (
-    <aside className="left">
-      <div className="tabs" role="tablist">
-        {tabs.map((t) => (
-          <button type="button" key={t.id} role="tab" className="tab" aria-selected={tab === t.id} onClick={() => ui.set({ leftTab: t.id })}>
-            {t.label}
-            {!!t.count && <span className="count">{t.count}</span>}
-          </button>
-        ))}
+/** Tells the user what to do next instead of showing an empty canvas. */
+function Onboarding() {
+  const { data: status } = useStatus();
+  const { data: jobs } = useJobs();
+  if (!status) return null;
+  const extracting = jobs?.some((j) => j.kind === "extract_source" && (j.status === "running" || j.status === "queued"));
+  const { sources, entities, chunks } = status.counts;
+  if (sources > 0 && !status.llm.configured && entities === 0) {
+    return (
+      <div className="banner">
+        <div className="glyph"><Icon name="sparkles" /></div>
+        <div className="grow">
+          <b>Connect an AI model to extract people, topics and facts</b>
+          <span className="small text-2">{sources} files are indexed ({chunks} passages) and searchable. Use your own key (OpenAI, OpenRouter, Qwen, Groq) or a local Ollama — or label files yourself below.</span>
+        </div>
+        <button type="button" className="btn primary" onClick={() => openSettings("ai")}>Connect a model</button>
       </div>
-      {tab === "sources" && <SourcesPanel />}
-      {tab === "review" && <ReviewPanel />}
-      {tab === "jobs" && <JobsPanel />}
-      {tab === "history" && <HistoryPanel />}
-    </aside>
-  );
+    );
+  }
+  if (extracting && entities === 0) {
+    return (
+      <div className="banner">
+        <div className="glyph"><Icon name="loader" spin /></div>
+        <div className="grow"><b>Extracting knowledge from your files…</b><span className="small text-2">Entities and facts appear here as each file is processed. Everything the AI proposes waits for your review.</span></div>
+      </div>
+    );
+  }
+  return null;
 }
 
 function MainArea() {
   const view = ui.use((s) => s.view);
+  const { data: status } = useStatus();
+  const addRoot = useAddRoot();
+  const empty = status && status.counts.sources === 0;
   return (
     <main className="main">
-      <div className="tabs" role="tablist" style={{ background: "var(--panel)" }}>
-        {VIEWS.map((v, i) => (
-          <button type="button" key={v.id} role="tab" className="tab" aria-selected={view === v.id} onClick={() => ui.set({ view: v.id })} title={`${v.label} (${i + 1})`}>
-            {v.label}
-          </button>
-        ))}
+      <div className="viewbar">
+        <div className="seg" role="tablist">
+          {VIEWS.map((v, i) => (
+            <button type="button" key={v.id} role="tab" aria-selected={view === v.id} onClick={() => ui.set({ view: v.id })} title={`${v.label} (${i + 1})`}>
+              <Icon name={v.icon} size={14} /> {v.label}
+            </button>
+          ))}
+        </div>
+        <span className="spacer" />
+        {status && (
+          <span className="small muted">
+            {status.counts.entities} entities · {status.counts.claims} facts
+            {status.counts.proposed ? <> · <button type="button" className="btn ghost sm" style={{ color: "var(--warn)" }} onClick={() => ui.set({ leftTab: "review" })}>{status.counts.proposed} to review</button></> : null}
+          </span>
+        )}
       </div>
-      {view === "graph" && <GraphView />}
-      {view === "swimlane" && <SwimlaneView />}
-      {view === "timeline" && <TimelineView />}
-      {view === "table" && <TableView />}
+      {empty ? (
+        <div className="view" style={{ display: "grid", placeItems: "center" }}>
+          <EmptyState
+            icon="folder"
+            title="Bring your files"
+            actions={<>
+              <button type="button" className="btn primary" onClick={() => addRoot.mutate(true)}><Icon name="folder" /> Add a folder</button>
+              <button type="button" className="btn" onClick={() => addRoot.mutate(false)}><Icon name="file" /> Add a file</button>
+            </>}
+          >
+            PDFs, scans, images, Word and Markdown notes, audio, video and transcripts. Folio reads them in place — nothing is
+            copied, moved or changed — and builds a knowledge graph you can check and correct.
+          </EmptyState>
+        </div>
+      ) : (
+        <>
+          <Onboarding />
+          {view === "graph" && <GraphView />}
+          {view === "swimlane" && <SwimlaneView />}
+          {view === "timeline" && <TimelineView />}
+          {view === "table" && <TableView />}
+        </>
+      )}
     </main>
   );
 }
 
-function RightPanel() {
+function Inspector() {
   const evidence = ui.use((s) => s.evidence);
   const openSource = ui.use((s) => s.openSourceId);
   const selection = ui.use((s) => s.selection);
@@ -96,24 +128,21 @@ function RightPanel() {
   else if (focus) content = <EntityCardPanel entityId={focus} />;
   else
     content = (
-      <div className="empty" style={{ textAlign: "left", lineHeight: 1.6 }}>
-        <p><b>How Folio works</b></p>
-        <ol style={{ paddingLeft: 18 }}>
-          <li>Add a folder — files are indexed locally and never moved.</li>
-          <li>Select a file and say (or type) what it is: <i>“This PDF is the Acme contract, Priya owns it.”</i></li>
-          <li>Review proposed facts; every fact links to its page or second.</li>
-          <li>Explore as a graph, swimlane, timeline or table. Ctrl+Z undoes anything.</li>
-        </ol>
-      </div>
+      <EmptyState icon="info" title="Nothing selected">
+        Click an entity in the graph, a file in the library, or search with <span className="kbd">Ctrl K</span>. Every fact shows where it came from —
+        the page, the paragraph or the second in a video.
+      </EmptyState>
     );
-  return <aside className="right">{content}</aside>;
+  return <aside className="inspector">{content}</aside>;
 }
 
 function Toasts() {
   const items = toasts.use((s) => s.items);
   return (
     <div className="toasts" aria-live="polite">
-      {items.map((t) => <div key={t.id} className={`toast ${t.tone}`}>{t.text}</div>)}
+      {items.map((t) => (
+        <div key={t.id} className={`toast ${t.tone}`}><Icon name={t.tone === "error" ? "alert" : "check"} size={14} />{t.text}</div>
+      ))}
     </div>
   );
 }
@@ -125,14 +154,13 @@ export function Layout() {
   return (
     <div className="app">
       <TopBar />
-      <LeftPanel />
+      <Sidebar />
       <MainArea />
-      <RightPanel />
       <VoiceBar />
+      <Inspector />
       <Toasts />
       {modal === "search" && <SearchPalette />}
-      {modal === "schema" && <SchemaEditor />}
-      {modal === "export" && <ExportMenu />}
+      {modal === "settings" && <SettingsModal />}
     </div>
   );
 }

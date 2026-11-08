@@ -17,7 +17,7 @@ def test_hybrid_search_and_entity_card(container, files):
     assert hits and any("signed" in h["text"] for h in hits)
     assert hits[0]["locator"]["kind"] in ("page", "text", "time")
 
-    priya = repo.search_entities(container.db.reader(), "priya")[0]
+    priya = repo.search_entities(container.kdb, "priya")[0]
     card = container.cards.card(priya.id)
     assert "owns" in card["groups"] and "email" in card["groups"]
     ev = card["groups"]["owns"][0]["evidence"][0]
@@ -27,7 +27,7 @@ def test_hybrid_search_and_entity_card(container, files):
 
 def test_views_share_one_model(container, files):
     _ingest(container, files)
-    conn = container.db.reader()
+    conn = container.kdb
     acme = repo.search_entities(conn, "Acme Contract", ["Contract"])[0]
     g = container.views.graph(acme.id, depth=2)
     assert any(e["predicate"] == "owns" for e in g["edges"])
@@ -56,11 +56,8 @@ def test_review_queue_surfaces_conflicts_first(container):
 
 
 def _snapshot(c):
-    conn = c.db.reader()
-    out = {}
-    for table in ("entities", "aliases", "claims", "evidence", "labels"):
-        out[table] = sorted(tuple(sorted(dict(r).items())) for r in conn.execute(f"SELECT * FROM {table}"))
-    return out
+    return {coll: sorted((d["_id"], repr(sorted(d.items()))) for d in c.kdb[coll].find())
+            for coll in ("entities", "claims", "labels")}
 
 
 def test_json_round_trip_loses_nothing(container, files, tmp_path):
@@ -69,8 +66,8 @@ def test_json_round_trip_loses_nothing(container, files, tmp_path):
     other = make_container(tmp_path / "restore")
     other.exporter.from_json(data)
     assert _snapshot(other) == _snapshot(container)
-    groups = {r[0] for r in other.db.reader().execute("SELECT id FROM event_groups")}
-    assert {g["id"] for g in data["event_groups"]} <= groups  # full provenance kept
+    groups = {g["_id"] for g in other.kdb["event_groups"].find()}
+    assert {g["_id"] for g in data["event_groups"]} <= groups  # full provenance kept
 
 
 def test_graphml_round_trip_loses_nothing(container, files, tmp_path):
@@ -79,8 +76,8 @@ def test_graphml_round_trip_loses_nothing(container, files, tmp_path):
     other = make_container(tmp_path / "restore")
     other.exporter.from_graphml(xml)
     a, b = _snapshot(container), _snapshot(other)
-    for table in ("entities", "aliases", "claims", "evidence"):
-        assert a[table] == b[table], table
+    for coll in ("entities", "claims"):
+        assert a[coll] == b[coll], coll
 
 
 def test_markdown_and_csv_exports(container, files):

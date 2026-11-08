@@ -16,6 +16,15 @@ from .base import ParsedUnit
 MAX_CHARS = 1200
 MAX_MEDIA_SECONDS = 60.0
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
+# Private-use glyphs (Wingdings bullets in PDFs), replacement chars and control characters.
+_JUNK = re.compile(r"[\ue000-\uf8ff\ufffd\x00-\x08\x0b\x0c\x0e-\x1f]")
+_SPACES = re.compile(r"[ \t\u00a0]{2,}")
+
+
+def clean_text(text: str) -> str:
+    """Remove glyphs that are not text (e.g. PDF symbol-font bullets) and squeeze spaces."""
+    lines = (_SPACES.sub(" ", _JUNK.sub(" ", line)).strip() for line in text.splitlines())
+    return "\n".join(line for line in lines if line)
 
 
 @dataclass
@@ -77,7 +86,8 @@ def _split_long(unit: ParsedUnit, max_chars: int) -> list[ParsedUnit]:
 
 def chunk_units(units: list[ParsedUnit], max_chars: int = MAX_CHARS) -> list[ChunkDraft]:
     chunks: list[ChunkDraft] = []
-    for unit in (u for raw in units for u in _split_long(raw, max_chars)):
+    cleaned = (ParsedUnit(clean_text(u.text), u.locator) for u in units)
+    for unit in (u for raw in cleaned for u in _split_long(raw, max_chars)):
         text = unit.text.strip()
         if not text:
             continue

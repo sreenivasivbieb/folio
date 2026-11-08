@@ -40,7 +40,18 @@ function Boot() {
   }, []);
 
   if (!conn) {
-    return <div className="empty" style={{ paddingTop: "30vh" }}>{error && !error.includes("fetch") ? error : "Starting Folio…"}</div>;
+    const failed = error && !error.includes("fetch");
+    return (
+      <div className="empty-state" style={{ height: "100%" }}>
+        <div className="glyph" style={{ background: "linear-gradient(135deg, #6e6ef2, #4848c8)", color: "white" }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={failed ? "" : "spin"}>
+            <path d="M21 12a9 9 0 1 1-6.22-8.56" />
+          </svg>
+        </div>
+        <h3>{failed ? "Folio could not start" : "Starting Folio…"}</h3>
+        {failed && <p>{error} — is MongoDB running? Start it with <code>docker compose up -d</code> in the Folio folder.</p>}
+      </div>
+    );
   }
   return (
     <ApiProvider conn={conn}>

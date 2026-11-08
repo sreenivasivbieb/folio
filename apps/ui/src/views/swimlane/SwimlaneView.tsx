@@ -8,10 +8,12 @@ import { scaleTime } from "d3-scale";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useKnowledgeActions, useSwimlane } from "@/api/queries";
 import { TypeDot } from "@/components/Badges";
+import { EmptyState } from "@/components/EmptyState";
+import { Icon } from "@/components/Icon";
 import { predicateLabel, shortDate, valueText } from "@/lib/format";
 import { selectClaims, ui } from "@/state/selection";
 
-const LANE_H = 46;
+const LANE_H = 48;
 const NO_IDS: string[] = []; // stable reference: store selectors must not allocate
 const TITLE_W = 180;
 
@@ -48,7 +50,7 @@ export function SwimlaneView() {
     return scaleTime().domain([new Date(Number(min) - pad), new Date(Number(max) + pad)]).range([8, width - 160]); // leave room for the last chip's label
   }, [data, width]);
 
-  if (!data) return <div className="empty">Loading…</div>;
+  if (!data) return <div className="empty-inline"><Icon name="loader" spin /></div>;
   const lanes = data.lanes;
 
   const onPointerDown = (e: React.PointerEvent, c: Claim) => {
@@ -84,13 +86,15 @@ export function SwimlaneView() {
     <div className="view" style={{ display: "flex", flexDirection: "column" }}>
       <div className="toolbar">
         <span className="small muted">Lanes by</span>
-        <button type="button" className="tab" aria-selected={groupBy === "entity"} onClick={() => setGroupBy("entity")}>Entity</button>
-        <button type="button" className="tab" aria-selected={groupBy === "type"} onClick={() => setGroupBy("type")}>Type</button>
+        <div className="seg">
+          <button type="button" aria-selected={groupBy === "entity"} onClick={() => setGroupBy("entity")}>Entity</button>
+          <button type="button" aria-selected={groupBy === "type"} onClick={() => setGroupBy("type")}>Type</button>
+        </div>
         <span className="spacer" />
         <span className="small muted">Drag a chip to change its date{groupBy === "entity" ? " or move it to another entity" : ""}</span>
       </div>
       <div className="scroll swim" ref={wrap}>
-        {lanes.length === 0 && <div className="empty">No dated facts yet.</div>}
+        {lanes.length === 0 && <EmptyState icon="lanes" title="No dated facts yet">Facts with a date — a signing, a deadline, a lecture on a given day — line up here, one lane per entity or type.</EmptyState>}
         {lanes.length > 0 && (
           <div style={{ minWidth: TITLE_W + width }}>
             <div className="axis">

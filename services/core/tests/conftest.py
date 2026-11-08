@@ -1,5 +1,10 @@
+"""Test fixtures. Tests need the MongoDB from docker-compose.yml (``docker compose up -d``); each
+container gets its own throwaway database, dropped after the test."""
+
 from __future__ import annotations
 
+import os
+import uuid
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -14,19 +19,33 @@ from folio_core.providers.stt.unavailable import NoTranscriber
 
 from .samples import write_samples
 
+MONGO_URI = os.environ.get("FOLIO_TEST_MONGO_URI", Settings().mongo_uri)
+_created: list[Container] = []
 
-def make_container(tmp: Path, **kw) -> Container:  # type: ignore[no-untyped-def]
-    settings = Settings(data_dir=tmp / "data", watch=False, stt="none", workers=1)
-    providers = Providers(llm=kw.pop("llm", FakeLLM()), embedder=HashingEmbedder(),
-                          stt=kw.pop("stt", NoTranscriber("tests")))
-    return build_container(settings, providers=providers, **kw)
+
+def make_container(tmp: Path, db_name: str | None = None, **kw) -> Container:  # type: ignore[no-untyped-def]
+    settings = Settings(data_dir=tmp / "data", watch=False, stt="none", workers=1, mongo_uri=MONGO_URI,
+                        mongo_db=db_name or f"folio_test_{uuid.uuid4().hex[:12]}")
+    providers = Providers(embedder=HashingEmbedder(), stt=kw.pop("stt", NoTranscriber("tests")),
+                          llm=kw.pop("llm", FakeLLM()))
+    c = build_container(settings, providers=providers, **kw)
+    _created.append(c)
+    return c
+
+
+@pytest.fixture(autouse=True)
+def _drop_test_databases() -> Iterator[None]:
+    yield
+    while _created:
+        c = _created.pop()
+        c.kdb.drop()
+        c.kdb.close()
+        c.index.close()
 
 
 @pytest.fixture
-def container(tmp_path: Path) -> Iterator[Container]:
-    c = make_container(tmp_path)
-    yield c
-    c.db.close()
+def container(tmp_path: Path) -> Container:
+    return make_container(tmp_path)
 
 
 @pytest.fixture
@@ -39,3 +58,7 @@ def files(tmp_path: Path) -> Path:
 
 def drain(c: Container) -> None:
     c.workers.run_until_idle()
+
+
+def entity_name(c: Container, entity_id: str) -> str:
+    return c.kdb["entities"].find_one({"_id": entity_id})["name"]

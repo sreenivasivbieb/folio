@@ -1,5 +1,8 @@
 # 0002 — Split storage: durable `knowledge.db` + disposable `index.db`
 
+**Status.** Superseded in part by [0009](0009-mongodb-open-schema.md): durable knowledge now lives in
+MongoDB; the disposable `index.db` described here is unchanged.
+
 **Context.** The proposal's design principle is "derived data is disposable, user decisions are
 not", but it put both in one SQLite file. Backups, "rebuild the index", and changing the embedding
 model are then surgery on the file that also holds the irreplaceable data.

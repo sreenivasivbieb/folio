@@ -1,7 +1,8 @@
 """Process-level configuration, read from ``FOLIO_*`` environment variables or CLI flags.
 
-Per-project choices that the user makes in the UI (cloud opt-in, active schema) live in the
-``settings`` table of knowledge.db instead, so they travel with the project's data.
+Per-project choices made in the UI (cloud opt-in, LLM provider, type hints) live in the
+``settings`` collection of the knowledge store instead, so they travel with the project's data.
+API keys live in ``<data_dir>/secrets.json`` (mode 0600) — never in the database or exports.
 """
 
 from __future__ import annotations
@@ -36,12 +37,12 @@ class Settings:
         "http://127.0.0.1:1420",
     )
 
-    # Providers (see providers/registry.py). Defaults are fully offline.
-    extractor: str = "rules"  # rules | llm
-    llm: str = "fake"  # fake | openai  (openai = any OpenAI-compatible endpoint, e.g. Ollama)
-    llm_base_url: str = "http://127.0.0.1:11434/v1"
-    llm_model: str = "qwen2.5:7b-instruct"
-    llm_api_key: str | None = None
+    # Knowledge store: MongoDB (single-node replica set, see docker-compose.yml).
+    mongo_uri: str = "mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true"
+    mongo_db: str = "folio"
+
+    # Providers (see providers/registry.py). The LLM is configured per project in the UI
+    # (bring your own key); without one, the offline rule extractor is used.
     embedder: str = "hashing"  # hashing | fastembed
     embed_model: str = "BAAI/bge-small-en-v1.5"
     stt: str = "auto"  # auto | faster-whisper | none
@@ -54,8 +55,8 @@ class Settings:
     watch: bool = True
 
     @property
-    def knowledge_db(self) -> Path:
-        return self.data_dir / "knowledge.db"
+    def secrets_file(self) -> Path:
+        return self.data_dir / "secrets.json"
 
     @property
     def index_db(self) -> Path:
@@ -77,8 +78,7 @@ class Settings:
         mapping: dict[str, object] = {}
         if v := env.get("FOLIO_DATA_DIR"):
             mapping["data_dir"] = Path(v)
-        for key in ("token", "extractor", "llm", "llm_base_url", "llm_model", "llm_api_key",
-                    "embedder", "embed_model", "stt", "stt_model"):
+        for key in ("token", "mongo_uri", "mongo_db", "embedder", "embed_model", "stt", "stt_model"):
             if v := env.get(f"FOLIO_{key.upper()}"):
                 mapping[key] = v
         for key in ("port", "workers", "parse_timeout_s", "parse_memory_mb"):

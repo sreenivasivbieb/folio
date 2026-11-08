@@ -1,5 +1,8 @@
 # 0005 — Offline defaults: rule extractor, hashing embedder, fake LLM
 
+**Status.** Refined by [0010](0010-byok-llm-and-explicit-downloads.md): the LLM is now configured per
+project (bring your own key); rules remain the offline fallback.
+
 **Context.** v1 must work fully offline, with zero network traffic by default, on a laptop
 without a GPU. No local LLM runtime is assumed to be installed. (Decision taken with the product
 owner: ship the LLM *interface* and a fake provider first.)

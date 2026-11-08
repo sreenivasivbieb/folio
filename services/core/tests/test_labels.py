@@ -13,7 +13,7 @@ from .conftest import drain
 def pdf_source(container, files):
     container.ingestion.add_root(str(files / "contract.pdf"))
     drain(container)
-    return repo.list_sources(container.db.reader())[0]
+    return repo.list_sources(container.kdb)[0]
 
 
 def test_the_proposal_example_end_to_end(container, pdf_source):
@@ -35,7 +35,7 @@ def test_the_proposal_example_end_to_end(container, pdf_source):
     done = labels.confirm(label.id)
     assert done.status == "committed"
 
-    conn = container.db.reader()
+    conn = container.kdb
     acme = repo.search_entities(conn, "Acme contract", ["Contract"])[0]
     claims = repo.claims_for_entity(conn, acme.id)
     preds = {c.predicate for c in claims}
@@ -69,7 +69,7 @@ def test_schema_constraints_disambiguate_else_ask_which_one(container):
     assert {o["value"] for o in q["options"]} == {person.id, org.id}
     container.labels.answer(label.id, q["id"], org.id)
     container.labels.confirm(label.id)
-    owns = repo.query_claims(container.db.reader(), predicate="owns")[0]
+    owns = repo.query_claims(container.kdb, predicate="owns")[0]
     assert owns.subject_id == org.id
 
 
@@ -85,7 +85,7 @@ def test_reject_and_correct_a_claim_by_voice(container):
     label = container.labels.preview("this is wrong, the owner is Priya", "claim", [wrong])
     assert [op["op"] for op in label.parsed["ops"]] == ["claim_status", "relation"]
     container.labels.confirm(label.id)
-    conn = container.db.reader()
+    conn = container.kdb
     assert repo.get_claim(conn, wrong).status == ClaimStatus.REJECTED
     owners = [c for c in repo.query_claims(conn, predicate="owns") if c.status == ClaimStatus.VERIFIED]
     assert repo.get_entity(conn, owners[0].subject_id).name == "Priya"
@@ -121,7 +121,7 @@ def test_first_name_asks_did_you_mean(container):
     label = container.labels.preview("Priya owns it", "entity", [contract.id])
     container.labels.answer(label.id, label.parsed["questions"][0]["id"], priya.id)
     container.labels.confirm(label.id)
-    owns = [c for c in repo.query_claims(container.db.reader(), predicate="owns")]
+    owns = [c for c in repo.query_claims(container.kdb, predicate="owns")]
     assert owns[0].subject_id == priya.id
 
 
@@ -134,4 +134,4 @@ def test_naming_an_auto_entity_in_a_label_verifies_it(container):
     container.knowledge.create_entity("Person", "Priya")
     label = container.labels.preview("Priya owns the Acme contract", "none", [])
     container.labels.confirm(label.id)
-    assert repo.get_entity(container.db.reader(), row["id"]).status == EntityStatus.VERIFIED
+    assert repo.get_entity(container.kdb, row["id"]).status == EntityStatus.VERIFIED

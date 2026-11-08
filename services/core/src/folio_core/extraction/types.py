@@ -22,9 +22,9 @@ class CandidateEntity(BaseModel):
 
 class CandidateClaim(BaseModel):
     subject: str = Field(description="Name of the entity the claim is about")
-    subject_type: str
-    predicate: str = Field(description="An attribute or relation name from the schema")
-    value: str | None = Field(default=None, description="Literal value for attributes")
+    subject_type: str = Field(description="Short type name, e.g. Person, Topic, Course, Organization")
+    predicate: str = Field(description="snake_case attribute or relation name, e.g. teaches, part_of, email")
+    value: str | float | int | bool | None = Field(default=None, description="Literal value for attributes")
     object: str | None = Field(default=None, description="Object entity name for relations")
     object_type: str | None = None
     valid_from: str | None = Field(default=None, description="ISO date the fact applies from")

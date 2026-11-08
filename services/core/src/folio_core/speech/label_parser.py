@@ -45,6 +45,7 @@ class LabelContext:
     source_entity: dict[str, Any] | None = None  # entity already representing the source
     entities: dict[str, dict[str, Any]] = field(default_factory=dict)  # targeted entities by id
     claims: dict[str, dict[str, Any]] = field(default_factory=dict)  # targeted claims by id
+    known_types: list[str] = field(default_factory=list)  # hints + types already in use
     today: date | None = None
 
 
@@ -85,7 +86,11 @@ class _Plan:
 
     def _type_word(self, name: str) -> str | None:
         words = name.split()
-        return self.ctx.schema.type_for_word(words[-1]) if words else None
+        if not words:
+            return None
+        last = words[-1].lower()
+        return self.ctx.schema.type_for_word(last) or next(
+            (t for t in self.ctx.known_types if t.lower() == last), None)
 
     def ref(self, name: str, allowed: list[str] | None = None) -> str:
         """Resolve a spoken name to a ref; may add a question instead of guessing."""
@@ -119,7 +124,7 @@ class _Plan:
                 etype = concrete[0]
             if etype is not None and concrete and etype not in concrete:
                 etype = None
-            type_options = concrete or list(self.ctx.schema.entity_types)
+            type_options = concrete or self.ctx.known_types or list(self.ctx.schema.entity_types)
             self.refs[key] = {"name": name, "type": etype, "entity_id": None, "new": True,
                               "type_options": type_options}
             partial = self._partial_matches(norm, concrete)
@@ -369,8 +374,8 @@ def answer_question(parsed: dict[str, Any], question_id: str, value: str) -> dic
     if q is None:
         raise InvalidInput(f"no question {question_id}")
     allowed = {o["value"]: o for o in q["options"]}
-    if value not in allowed:
-        raise InvalidInput(f"'{value}' is not one of the options")
+    if value not in allowed and not (q["field"] == "type" and value.strip()):
+        raise InvalidInput(f"'{value}' is not one of the options")  # types are open: any name is fine
     ref = parsed["refs"][q["ref"]]
     parsed["questions"] = [x for x in parsed["questions"] if x["id"] != question_id]
     if q["field"] == "type":

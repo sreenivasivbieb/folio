@@ -13,7 +13,8 @@ export type Selection =
   | { kind: "source"; id: string };
 
 export type ViewName = "graph" | "swimlane" | "timeline" | "table";
-export type LeftTab = "sources" | "review" | "jobs" | "history";
+export type LeftTab = "sources" | "review" | "activity";
+export type SettingsTab = "ai" | "voice" | "privacy" | "hints" | "data";
 
 interface UiState {
   selection: Selection;
@@ -24,7 +25,8 @@ interface UiState {
   openSourceId: string | null; // a whole file opened from the sources list
   label: Label | null; // label preview awaiting confirmation
   recording: boolean;
-  modal: "none" | "search" | "schema" | "export";
+  modal: "none" | "search" | "settings";
+  settingsTab: SettingsTab;
 }
 
 export const ui = createStore<UiState>({
@@ -37,7 +39,12 @@ export const ui = createStore<UiState>({
   label: null,
   recording: false,
   modal: "none",
+  settingsTab: "ai",
 });
+
+export function openSettings(tab: SettingsTab = "ai") {
+  ui.set({ modal: "settings", settingsTab: tab });
+}
 
 export function selectEntity(id: string, additive = false) {
   ui.set((s) => {

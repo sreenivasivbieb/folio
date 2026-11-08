@@ -1,47 +1,58 @@
-/** Top bar: search, privacy indicator (local vs cloud — always visible), undo/redo, tools. */
-import { unwrap, useApi } from "@/api/client";
-import { useAction, useKnowledgeActions, useStatus } from "@/api/queries";
-import { ui } from "@/state/selection";
+/** Top bar: search, background-work indicator, privacy (always visible), undo/redo, settings. */
+import { useJobs, useKnowledgeActions, useStatus } from "@/api/queries";
+import { Icon } from "@/components/Icon";
+import { openSettings, ui } from "@/state/selection";
+
+function WorkIndicator() {
+  const { data: jobs } = useJobs();
+  const running = jobs?.filter((j) => j.status === "running") ?? [];
+  const queued = jobs?.filter((j) => j.status === "queued").length ?? 0;
+  if (!running.length && !queued) return null;
+  const top = running[0];
+  return (
+    <button type="button" className="btn ghost sm" onClick={() => ui.set({ leftTab: "activity" })} title="Background work">
+      <Icon name="loader" spin />
+      <span className="small">
+        {top ? `${top.kind === "extract_source" ? "Extracting" : top.kind === "download_speech_model" ? "Downloading" : "Indexing"}${top.message ? ` · ${top.message}` : ""}` : "Queued"}
+        {queued ? ` (+${queued})` : ""}
+      </span>
+    </button>
+  );
+}
 
 export function TopBar() {
-  const { client } = useApi();
   const { data: status } = useStatus();
   const { undo, redo } = useKnowledgeActions();
-  const setCloud = useAction(async (enabled: boolean) => unwrap(await client.PUT("/api/settings/cloud", { body: { enabled } })));
-  const busy = (status?.jobs.queued ?? 0) + (status?.jobs.running ?? 0);
-  const local = status?.network_mode !== "cloud";
+  const cloud = status?.network_mode === "cloud" || status?.cloud_enabled;
 
   return (
-    <div className="topbar">
-      <span className="brand">Folio</span>
-      <button type="button" className="btn" style={{ minWidth: 260, textAlign: "left", color: "var(--muted)" }} onClick={() => ui.set({ modal: "search" })}>
-        Search entities & passages… <span className="kbd">Ctrl K</span>
+    <header className="topbar">
+      <div className="brand">
+        <div className="brand-mark"><Icon name="layers" size={15} /></div>
+        Folio
+      </div>
+      <button type="button" className="searchbox" onClick={() => ui.set({ modal: "search" })}>
+        <Icon name="search" />
+        <span className="label">Search people, topics, passages…</span>
+        <span className="kbd">Ctrl K</span>
       </button>
       <span className="spacer" />
-      {busy > 0 && <span className="small muted" title="Background jobs">⟳ indexing {busy}</span>}
-      {status && (
-        <span className="small muted">{status.counts.entities} entities · {status.counts.claims} facts · {status.counts.proposed} to review</span>
-      )}
+      <WorkIndicator />
       <button
         type="button"
-        className={`badge ${local ? "local" : "cloud"}`}
-        style={{ border: 0, cursor: "pointer" }}
-        title={
-          local
-            ? "Everything runs on this machine. No network traffic. Click to allow cloud models for this project."
-            : "Cloud models allowed for this project. Click to go back to local only."
-        }
-        onClick={() => {
-          const next = !status?.cloud_enabled;
-          if (!next || window.confirm("Allow cloud models for this project? Content may be sent to the configured provider.")) setCloud.mutate(next);
-        }}
+        className={`badge ${cloud ? "warn" : "ok"}`}
+        style={{ border: 0, cursor: "pointer", height: 24, padding: "0 10px" }}
+        onClick={() => openSettings("privacy")}
+        title={cloud ? `Cloud allowed: file text may be sent to ${status?.llm.label ?? "the AI provider"}` : "Everything stays on this computer"}
       >
-        {status?.cloud_enabled ? "☁ cloud allowed" : "● local only"}
+        <Icon name={cloud ? "cloud" : "shield"} size={13} />
+        {cloud ? `Cloud · ${status?.llm.label ?? "on"}` : "Local only"}
       </button>
-      <button type="button" className="btn icon" title="Undo (Ctrl+Z)" onClick={() => undo.mutate(undefined)}>↶</button>
-      <button type="button" className="btn icon" title="Redo (Ctrl+Shift+Z)" onClick={() => redo.mutate(undefined)}>↷</button>
-      <button type="button" className="btn" onClick={() => ui.set({ modal: "schema" })}>Schema</button>
-      <button type="button" className="btn" onClick={() => ui.set({ modal: "export" })}>Export</button>
-    </div>
+      <div className="row" style={{ gap: 2 }}>
+        <button type="button" className="btn ghost icon-only" title="Undo (Ctrl+Z)" onClick={() => undo.mutate(undefined)}><Icon name="undo" /></button>
+        <button type="button" className="btn ghost icon-only" title="Redo (Ctrl+Shift+Z)" onClick={() => redo.mutate(undefined)}><Icon name="redo" /></button>
+        <button type="button" className="btn ghost icon-only" title="Settings" onClick={() => openSettings()}><Icon name="settings" /></button>
+      </div>
+    </header>
   );
 }

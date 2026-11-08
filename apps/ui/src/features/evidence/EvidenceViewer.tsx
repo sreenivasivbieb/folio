@@ -9,6 +9,7 @@ import { useApi } from "@/api/client";
 import { useChunks, useLabel, useSource } from "@/api/queries";
 import { basename, locatorLabel } from "@/lib/format";
 import { ui } from "@/state/selection";
+import { Icon } from "@/components/Icon";
 import { PdfPage } from "./PdfPage";
 
 function Highlighted({ text, quote }: { text: string; quote: string }) {
@@ -71,13 +72,13 @@ function ImageRegion({ url, rect }: { url: string; rect?: number[] | null }) {
 
 function Frame({ title, children }: { title: ReactNode; children: ReactNode }) {
   return (
-    <div className="evidence">
-      <div className="row" style={{ marginBottom: 8 }}>
-        <strong className="ellipsis">{title}</strong>
-        <span className="spacer" />
-        <button type="button" className="btn small" onClick={() => ui.set({ evidence: null, openSourceId: null })}>Close</button>
+    <div>
+      <div className="insp-head row">
+        <Icon name="quote" className="muted" />
+        <strong className="ellipsis grow">{title}</strong>
+        <button type="button" className="btn ghost sm icon-only" title="Close (Esc)" onClick={() => ui.set({ evidence: null, openSourceId: null })}><Icon name="x" /></button>
       </div>
-      {children}
+      <div className="evidence">{children}</div>
     </div>
   );
 }
@@ -98,7 +99,7 @@ export function EvidenceViewer({ evidence }: { evidence: Evidence }) {
       </Frame>
     );
   }
-  if (!detail) return <Frame title="Loading…">{null}</Frame>;
+  if (!detail) return <Frame title="Loading…"><Icon name="loader" spin /></Frame>;
   const src = detail.source;
   const fileUrl = authedUrl(conn, `/api/sources/${src.id}/file`);
   const chunk = chunks ? pickChunk(chunks, evidence) : undefined;
@@ -109,7 +110,7 @@ export function EvidenceViewer({ evidence }: { evidence: Evidence }) {
       {(src.kind === "video" || src.kind === "audio") && <Media url={fileUrl} kind={src.kind} start={loc.start} />}
       {src.kind === "image" && <ImageRegion url={fileUrl} rect={loc.rect} />}
       <div style={{ marginTop: 10 }}>
-        <div className="small muted" style={{ marginBottom: 4 }}>Quoted span</div>
+        <div className="tiny muted" style={{ marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 650 }}>Quoted span</div>
         <Highlighted text={chunk?.text ?? evidence.quote} quote={evidence.quote} />
       </div>
     </Frame>
@@ -121,27 +122,31 @@ export function SourceViewer({ sourceId }: { sourceId: string }) {
   const { conn } = useApi();
   const { data: detail } = useSource(sourceId);
   const { data: chunks } = useChunks(sourceId);
-  if (!detail) return <Frame title="Loading…">{null}</Frame>;
+  if (!detail) return <Frame title="Loading…"><Icon name="loader" spin /></Frame>;
   const src = detail.source;
   const fileUrl = authedUrl(conn, `/api/sources/${src.id}/file`);
   return (
     <Frame title={<span title={src.path}>{basename(src.path)}</span>}>
-      <div className="row small muted" style={{ marginBottom: 8 }}>
-        <span className="badge">{src.kind}</span> {src.status} · {detail.chunks} chunks · {(src.size / 1024).toFixed(0)} KB
+      <div className="row small muted" style={{ marginBottom: 10 }}>
+        <span className={`badge ${src.status}`}>{src.status}</span> {src.kind} · {detail.chunks} passages · {(src.size / 1024 / 1024).toFixed(1)} MB
       </div>
-      {src.error && <div className="question">{src.error}</div>}
+      {src.error && <div className="callout bad" style={{ marginBottom: 10 }}><Icon name="alert" /><span>{src.error}</span></div>}
       {src.kind === "pdf" && <PdfPage url={fileUrl} page={1} />}
       {(src.kind === "video" || src.kind === "audio") && <Media url={fileUrl} kind={src.kind} />}
       {src.kind === "image" && <ImageRegion url={fileUrl} />}
-      <div className="stack" style={{ marginTop: 10 }}>
-        {(chunks ?? []).map((c) => (
+      <div className="callout" style={{ margin: "12px 0" }}>
+        <Icon name="mic" />
+        <span>This file is selected: say or type what it is below — e.g. “This PDF is the networks lecture, Dr. Jaiswal teaches it”.</span>
+      </div>
+      <div className="stack">
+        {(chunks ?? []).slice(0, 60).map((c) => (
           <div key={c.id}>
-            <div className="small muted">{locatorLabel(c.locator)}</div>
+            <div className="tiny muted" style={{ marginBottom: 3 }}>{locatorLabel(c.locator)}</div>
             <div className="excerpt">{c.text}</div>
           </div>
         ))}
+        {(chunks?.length ?? 0) > 60 && <div className="tiny muted">…and {(chunks?.length ?? 0) - 60} more passages (all are searchable).</div>}
       </div>
-      <p className="small muted">Tip: with this file selected, speak or type a label, e.g. “This PDF is the Acme contract, Priya owns it”.</p>
     </Frame>
   );
 }

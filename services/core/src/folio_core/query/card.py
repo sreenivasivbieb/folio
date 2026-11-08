@@ -9,23 +9,25 @@ from typing import Any
 from ..domain.errors import NotFound
 from ..domain.schema import MENTIONS, REPRESENTED_BY
 from ..store import repo
-from ..store.db import Database
+from ..store.mongo import KnowledgeDB
 from .search import HybridSearch
 
 
 class EntityCards:
-    def __init__(self, db: Database, search: HybridSearch) -> None:
-        self.db = db
+    def __init__(self, kdb: KnowledgeDB, search: HybridSearch) -> None:
+        self.kdb = kdb
         self.search = search
 
     def card(self, entity_id: str, passages: int = 5) -> dict[str, Any]:
-        conn = self.db.reader()
-        entity_id = repo.resolve_merged(conn, entity_id)
-        entity = repo.get_entity(conn, entity_id)
+        entity_id = repo.resolve_merged(self.kdb, entity_id)
+        entity = repo.get_entity(self.kdb, entity_id)
         if entity is None:
             raise NotFound(f"entity {entity_id} not found")
-        claims = repo.claims_for_entity(conn, entity_id)
-        related = repo.get_entities(conn, [x for c in claims for x in (c.subject_id, c.object_id) if x])
+        claims = repo.claims_for_entity(self.kdb, entity_id)
+        related = repo.get_entities(self.kdb, [x for c in claims for x in (c.subject_id, c.object_id) if x])
+        source_ids = [e.source_id for c in claims for e in c.evidence if e.source_id]
+        source_ids += [c.value for c in claims if c.predicate == REPRESENTED_BY and isinstance(c.value, str)]
+        sources = repo.get_sources(self.kdb, source_ids)
 
         groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
         files: dict[str, dict[str, Any]] = {}
@@ -44,14 +46,12 @@ class EntityCards:
             for ev in c.evidence:
                 if ev.chunk_id:
                     cited_chunks.add(ev.chunk_id)
-                if ev.source_id and ev.source_id not in files:
-                    src = repo.get_source(conn, ev.source_id)
-                    if src:
-                        files[src.id] = {"id": src.id, "path": src.path, "kind": src.kind.value}
-            if c.predicate == REPRESENTED_BY and isinstance(c.value, str):
-                src = repo.get_source(conn, c.value)
-                if src:
+                src = sources.get(ev.source_id or "")
+                if src and src.id not in files:
                     files[src.id] = {"id": src.id, "path": src.path, "kind": src.kind.value}
+            if c.predicate == REPRESENTED_BY and isinstance(c.value, str) and c.value in sources:
+                src = sources[c.value]
+                files[src.id] = {"id": src.id, "path": src.path, "kind": src.kind.value}
 
         # Passages that mention the entity but have no extracted claim yet (recall safety net).
         names = " ".join(dict.fromkeys([entity.name, *entity.aliases]))

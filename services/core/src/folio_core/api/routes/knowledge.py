@@ -32,7 +32,7 @@ router = APIRouter(tags=["knowledge"])
 @router.get("/entities", response_model=list[Entity])
 def list_entities(c: C, q: str = "", type: list[str] | None = Query(default=None),
                   include_rejected: bool = False, limit: int = 100) -> list[Entity]:
-    return repo.search_entities(c.db.reader(), q, type, include_rejected, limit)
+    return repo.search_entities(c.kdb, q, type, include_rejected, limit)
 
 
 @router.post("/entities", response_model=Entity)
@@ -89,7 +89,7 @@ def list_claims(
 ) -> list[Claim]:
     """The table view: every claim for an entity or a filter."""
     return repo.query_claims(
-        c.db.reader(), entity_id=entity_id, status=status, predicate=predicate,
+        c.kdb, entity_id=entity_id, status=status, predicate=predicate,
         entity_type=entity_type, kind=kind, min_confidence=min_confidence,
         max_confidence=max_confidence, source_id=source_id, dated_only=dated_only,
         needs_review=needs_review, order=order, limit=limit, offset=offset,
@@ -108,7 +108,7 @@ def create_claim(body: CreateClaim, c: C) -> ClaimRef:
 
 @router.get("/claims/{claim_id}", response_model=Claim)
 def get_claim(claim_id: str, c: C) -> Claim:
-    claim = repo.get_claim(c.db.reader(), claim_id)
+    claim = repo.get_claim(c.kdb, claim_id)
     if claim is None:
         raise NotFound(f"claim {claim_id} not found")
     return claim

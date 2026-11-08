@@ -64,7 +64,7 @@ def list_labels(c: C, limit: int = 50) -> list[Label]:
 
 @router.get("/labels/{label_id}", response_model=Label)
 def get_label(label_id: str, c: C) -> Label:
-    label = repo.get_label(c.db.reader(), label_id)
+    label = repo.get_label(c.kdb, label_id)
     if label is None:
         raise NotFound(f"label {label_id} not found")
     return label

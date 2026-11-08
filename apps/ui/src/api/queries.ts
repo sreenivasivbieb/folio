@@ -179,6 +179,25 @@ export function useSearch(q: string) {
   });
 }
 
+export function useLlmSettings() {
+  const { client } = useApi();
+  return useQuery({ queryKey: ["llm"], queryFn: async () => unwrap(await client.GET("/api/llm")) });
+}
+
+export function useSettingsActions() {
+  const { client } = useApi();
+  return {
+    saveLlm: useAction(async (body: S["LLMSettingsBody"]) => unwrap(await client.PUT("/api/llm", { body })), "AI model saved"),
+    removeLlm: useAction(async () => unwrap(await client.DELETE("/api/llm")), "Back to offline extraction"),
+    testLlm: useAction(async () => unwrap(await client.POST("/api/llm/test"))),
+    listModels: useAction(async (body: S["ModelsBody"]) => unwrap(await client.POST("/api/llm/models", { body }))),
+    extractAll: useAction(async () => unwrap(await client.POST("/api/extract/all")), "Extraction started for all files"),
+    downloadSpeech: useAction(async () => unwrap(await client.POST("/api/speech/download")), "Downloading the speech model"),
+    setCloud: useAction(async (enabled: boolean) => unwrap(await client.PUT("/api/settings/cloud", { body: { enabled } }))),
+    rebuildIndex: useAction(async () => unwrap(await client.POST("/api/index/rebuild")), "Re-indexing all files"),
+  };
+}
+
 /** Every write: run, toast on failure, refresh caches (SSE also refreshes other windows/views). */
 export function useAction<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>, success?: string) {
   const qc = useQueryClient();

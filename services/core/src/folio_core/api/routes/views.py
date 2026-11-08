@@ -38,17 +38,16 @@ def table(c: C, entity_id: str | None = None, status: list[str] | None = Query(d
           order: str = "recent", limit: int = 1000) -> TableView:
     """Table view: claims for an entity or a filter, sortable, with bulk verify/reject."""
     data = c.views.table(entity_id=entity_id, status=status, predicate=predicate,
+                         exclude_predicates=None if include_mentions else ["mentions"],
                          entity_type=entity_type, min_confidence=min_confidence, order=order,
                          limit=limit)
-    if not include_mentions:
-        data["claims"] = [x for x in data["claims"] if x["predicate"] != "mentions"]
     return TableView.model_validate(data)
 
 
 @router.get("/search", response_model=SearchResult)
 def search(q: str, c: C, k: int = 20) -> SearchResult:
     """Entity query by text (voice queries use the same endpoint with the transcript)."""
-    return SearchResult(entities=repo.search_entities(c.db.reader(), q, limit=10),
+    return SearchResult(entities=repo.search_entities(c.kdb, q, limit=10),
                         passages=c.search.search(q, k))  # type: ignore[arg-type]
 
 

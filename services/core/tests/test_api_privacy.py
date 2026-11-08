@@ -62,7 +62,8 @@ def test_full_loop_over_http(client, container, files):
 
 def test_errors_map_to_http_status(client):
     assert client.get("/api/entities/ent_missing").status_code == 404
-    r = client.post("/api/entities", json={"type": "Spaceship", "name": "X"})
+    assert client.post("/api/entities", json={"type": "Spaceship", "name": "X"}).status_code == 200  # open schema
+    r = client.post("/api/entities", json={"type": "Person", "name": "  "})
     assert r.status_code == 422
 
 
@@ -92,9 +93,7 @@ def test_cloud_provider_requires_opt_in(container):
     cloud = OpenAICompatibleLLM("https://api.example.com/v1", "big-model")
     assert not cloud.is_local
     with pytest.raises(PrivacyBlocked):
-        ensure_allowed(container.db, cloud)
-    from folio_core.store.db import dumps
-
+        ensure_allowed(container.kdb, cloud)
     with container.ledger.group("user", "settings.cloud") as tx:
-        tx.upsert("settings", {"id": "cloud.enabled", "value": dumps(True)})
-    ensure_allowed(container.db, cloud)  # no exception once the project opts in
+        tx.upsert("settings", {"id": "cloud.enabled", "value": True})
+    ensure_allowed(container.kdb, cloud)  # no exception once the project opts in

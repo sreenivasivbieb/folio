@@ -58,6 +58,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Llm */
+        get: operations["get_llm_api_llm_get"];
+        /**
+         * Put Llm
+         * @description Choose the project's LLM. A hosted (non-loopback) endpoint is an explicit cloud opt-in.
+         */
+        put: operations["put_llm_api_llm_put"];
+        post?: never;
+        /**
+         * Delete Llm
+         * @description Back to the offline rule extractor (the stored key is kept for later).
+         */
+        delete: operations["delete_llm_api_llm_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * List Models
+         * @description The provider's live model list (so the user never has to guess model ids).
+         */
+        post: operations["list_models_api_llm_models_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Llm
+         * @description A real tiny request with the saved settings: proves key, model and JSON mode work.
+         */
+        post: operations["test_llm_api_llm_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/extract/all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extract All
+         * @description Re-run extraction on every indexed file (e.g. after choosing an LLM). Cached = free.
+         */
+        post: operations["extract_all_api_extract_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/speech/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Download Speech
+         * @description Explicitly fetch the speech model (the only time Folio downloads a model).
+         */
+        post: operations["download_speech_api_speech_download_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/metrics/acceptance": {
         parameters: {
             query?: never;
@@ -106,7 +211,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Remove Root */
+        /**
+         * Remove Root
+         * @description Stop tracking a folder: its files leave the list and the index; knowledge is kept.
+         */
         delete: operations["remove_root_api_roots__root_id__delete"];
         options?: never;
         head?: never;
@@ -249,7 +357,7 @@ export interface paths {
         put?: never;
         /**
          * Rebuild Index
-         * @description Delete index.db and re-index everything. User knowledge (knowledge.db) is untouched.
+         * @description Empty index.db and re-index everything. Knowledge (MongoDB) is untouched.
          */
         post: operations["rebuild_index_api_index_rebuild_post"];
         delete?: never;
@@ -1373,6 +1481,43 @@ export interface components {
             /** Updated At */
             updated_at: string;
         };
+        /** LLMSettingsBody */
+        LLMSettingsBody: {
+            /** Provider */
+            provider: string;
+            /** Base Url */
+            base_url: string;
+            /** Model */
+            model: string;
+            /** Api Key */
+            api_key?: string | null;
+        };
+        /** LLMSettingsView */
+        LLMSettingsView: {
+            status: components["schemas"]["LLMStatus"];
+            /** Presets */
+            presets: components["schemas"]["PresetView"][];
+        };
+        /** LLMStatus */
+        LLMStatus: {
+            /** Configured */
+            configured: boolean;
+            /** Provider */
+            provider?: string | null;
+            /** Label */
+            label?: string | null;
+            /** Base Url */
+            base_url?: string | null;
+            /** Model */
+            model?: string | null;
+            /**
+             * Local
+             * @default true
+             */
+            local: boolean;
+            /** Key Hint */
+            key_hint?: string | null;
+        };
         /** Label */
         Label: {
             /** Id */
@@ -1466,6 +1611,15 @@ export interface components {
             /** Created At */
             created_at: string;
         };
+        /** ModelsBody */
+        ModelsBody: {
+            /** Provider */
+            provider: string;
+            /** Base Url */
+            base_url: string;
+            /** Api Key */
+            api_key?: string | null;
+        };
         /** Ok */
         Ok: {
             /**
@@ -1494,6 +1648,24 @@ export interface components {
             };
             /** Score */
             score: number;
+        };
+        /** PresetView */
+        PresetView: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Base Url */
+            base_url: string;
+            /** Needs Key */
+            needs_key: boolean;
+            /** Key Url */
+            key_url?: string | null;
+            /**
+             * Suggested Models
+             * @default []
+             */
+            suggested_models: string[];
         };
         /** ProviderInfo */
         ProviderInfo: {
@@ -1600,7 +1772,7 @@ export interface components {
          * SourceStatus
          * @enum {string}
          */
-        SourceStatus: "pending" | "indexing" | "indexed" | "failed" | "missing" | "forgotten";
+        SourceStatus: "pending" | "indexing" | "indexed" | "failed" | "missing" | "forgotten" | "removed";
         /** SplitBody */
         SplitBody: {
             /** Name */
@@ -1623,6 +1795,9 @@ export interface components {
              * @enum {string}
              */
             network_mode: "local" | "cloud";
+            /** Extractor */
+            extractor: string;
+            llm: components["schemas"]["LLMStatus"];
             /** Providers */
             providers: components["schemas"]["ProviderInfo"][];
             voice: components["schemas"]["VoiceStatus"];
@@ -1634,6 +1809,8 @@ export interface components {
             counts: {
                 [key: string]: number;
             };
+            /** Types */
+            types: string[];
             /** Vector Backend */
             vector_backend: string;
             /** Supported Extensions */
@@ -1732,6 +1909,10 @@ export interface components {
             speech_model: string;
             /** Speech Available */
             speech_available: boolean;
+            /** Speech Downloadable */
+            speech_downloadable: boolean;
+            /** Speech Size Mb */
+            speech_size_mb: number;
         };
         /** VoiceToggle */
         VoiceToggle: {
@@ -1820,6 +2001,172 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_llm_api_llm_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LLMSettingsView"];
+                };
+            };
+        };
+    };
+    put_llm_api_llm_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LLMSettingsBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LLMSettingsView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_llm_api_llm_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LLMSettingsView"];
+                };
+            };
+        };
+    };
+    list_models_api_llm_models_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelsBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_llm_api_llm_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ok"];
+                };
+            };
+        };
+    };
+    extract_all_api_extract_all_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ok"];
+                };
+            };
+        };
+    };
+    download_speech_api_speech_download_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ok"];
                 };
             };
         };

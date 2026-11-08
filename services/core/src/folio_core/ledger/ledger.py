@@ -1,220 +1,209 @@
 from __future__ import annotations
 
-import sqlite3
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
+from pymongo.client_session import ClientSession
+
 from ..domain.errors import Conflict, NotFound
 from ..domain.ids import new_id
 from ..realtime import Bus
-from ..store.db import Database, dumps, loads, utcnow
+from ..store.index_db import utcnow
+from ..store.mongo import KnowledgeDB, to_doc, to_row
 
-# Tables whose rows are user knowledge. Only these are written through the ledger.
-TRACKED_TABLES = frozenset(
-    {"settings", "schema_versions", "roots", "entities", "aliases", "claims", "evidence", "labels"}
-)
+# Collections whose documents are user knowledge. Only these are written through the ledger.
+TRACKED = frozenset({"settings", "schema_versions", "roots", "entities", "claims", "labels"})
 
-UNDOABLE_ACTORS = ("user", "voice")
+UNDOABLE_ACTORS = ["user", "voice"]
+
+
+def _check(coll: str) -> None:
+    if coll not in TRACKED:
+        raise ValueError(f"collection {coll!r} is not ledger-tracked")
 
 
 class Tx:
-    """A ledger transaction: row-level writes that are recorded as events of one group."""
+    """A ledger transaction: document writes recorded as events of one group. Reads through the
+    Tx see the transaction's own uncommitted writes."""
 
-    def __init__(self, conn: sqlite3.Connection, group_id: str, actor: str) -> None:
-        self.conn = conn
+    def __init__(self, kdb: KnowledgeDB, session: ClientSession, group_id: str, actor: str) -> None:
+        self.kdb = kdb
+        self.session = session
         self.group_id = group_id
         self.actor = actor
-        self.changed: list[tuple[str, str]] = []  # (table, row_id)
+        self.undoes: str | None = None
+        self.changed: list[tuple[str, str]] = []  # (collection, doc id)
 
-    # --- primitives -----------------------------------------------------------------------
+    # --- reads (inside the transaction) ---------------------------------------------------
 
-    def _row(self, table: str, row_id: str) -> dict[str, Any] | None:
-        _check(table)
-        row = self.conn.execute(f"SELECT * FROM {table} WHERE id = ?", (row_id,)).fetchone()
-        return dict(row) if row else None
+    def get(self, coll: str, doc_id: str) -> dict[str, Any] | None:
+        return to_row(self.kdb[coll].find_one({"_id": doc_id}, session=self.session))
 
-    def _event(self, table: str, row_id: str, op: str, before: Any, after: Any) -> None:
-        self.conn.execute(
-            "INSERT INTO events(id, group_id, ts, tbl, row_id, op, before, after) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (new_id("event"), self.group_id, utcnow(), table, row_id, op,
-             dumps(before) if before is not None else None,
-             dumps(after) if after is not None else None),
-        )
-        self.changed.append((table, row_id))
+    def find(self, coll: str, query: dict[str, Any], **kw: Any) -> list[dict[str, Any]]:
+        return [to_row(d) for d in self.kdb[coll].find(query, session=self.session, **kw)]  # type: ignore[misc]
 
-    def insert(self, table: str, row: dict[str, Any]) -> dict[str, Any]:
-        _check(table)
-        cols = list(row)
-        self.conn.execute(
-            f"INSERT INTO {table}({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})",
-            [row[c] for c in cols],
-        )
-        after = self._row(table, row["id"])
-        self._event(table, row["id"], "insert", None, after)
+    # --- writes ---------------------------------------------------------------------------
+
+    def _event(self, coll: str, doc_id: str, op: str, before: Any, after: Any) -> None:
+        self.kdb["events"].insert_one({
+            "_id": new_id("event"), "seq": self.kdb.next_seq("events", self.session),
+            "group_id": self.group_id, "ts": utcnow(), "coll": coll, "doc_id": doc_id, "op": op,
+            "before": before, "after": after,
+        }, session=self.session)
+        self.changed.append((coll, doc_id))
+
+    def insert(self, coll: str, row: dict[str, Any]) -> dict[str, Any]:
+        _check(coll)
+        self.kdb[coll].insert_one(to_doc(row), session=self.session)
+        after = self.get(coll, row["id"])
+        self._event(coll, row["id"], "insert", None, after)
         return after  # type: ignore[return-value]
 
-    def update(self, table: str, row_id: str, changes: dict[str, Any]) -> dict[str, Any]:
-        before = self._row(table, row_id)
+    def update(self, coll: str, doc_id: str, changes: dict[str, Any]) -> dict[str, Any]:
+        _check(coll)
+        before = self.get(coll, doc_id)
         if before is None:
-            raise NotFound(f"{table} {row_id} not found")
+            raise NotFound(f"{coll} {doc_id} not found")
         real = {k: v for k, v in changes.items() if before.get(k) != v}
         if not real:
             return before
         if "updated_at" in before and "updated_at" not in real:
             real["updated_at"] = utcnow()
-        sets = ", ".join(f"{k} = ?" for k in real)
-        self.conn.execute(f"UPDATE {table} SET {sets} WHERE id = ?", [*real.values(), row_id])
-        after = self._row(table, row_id)
-        self._event(table, row_id, "update", before, after)
+        self.kdb[coll].update_one({"_id": doc_id}, {"$set": real}, session=self.session)
+        after = self.get(coll, doc_id)
+        self._event(coll, doc_id, "update", before, after)
         return after  # type: ignore[return-value]
 
-    def delete(self, table: str, row_id: str) -> dict[str, Any] | None:
-        before = self._row(table, row_id)
+    def delete(self, coll: str, doc_id: str) -> dict[str, Any] | None:
+        _check(coll)
+        before = self.get(coll, doc_id)
         if before is None:
             return None
-        self.conn.execute(f"DELETE FROM {table} WHERE id = ?", (row_id,))
-        self._event(table, row_id, "delete", before, None)
+        self.kdb[coll].delete_one({"_id": doc_id}, session=self.session)
+        self._event(coll, doc_id, "delete", before, None)
         return before
 
-    def upsert(self, table: str, row: dict[str, Any]) -> dict[str, Any]:
-        if self._row(table, row["id"]) is None:
-            return self.insert(table, row)
-        return self.update(table, row["id"], {k: v for k, v in row.items() if k != "id"})
-
-
-def _check(table: str) -> None:
-    if table not in TRACKED_TABLES:
-        raise ValueError(f"table {table!r} is not ledger-tracked")
+    def upsert(self, coll: str, row: dict[str, Any]) -> dict[str, Any]:
+        if self.get(coll, row["id"]) is None:
+            return self.insert(coll, row)
+        return self.update(coll, row["id"], {k: v for k, v in row.items() if k != "id"})
 
 
 class Ledger:
-    def __init__(self, db: Database, bus: Bus) -> None:
-        self.db = db
+    """Append-only event log. Every durable write goes through ``group()``; see ADR-0004."""
+
+    def __init__(self, kdb: KnowledgeDB, bus: Bus) -> None:
+        self.kdb = kdb
         self.bus = bus
         self._local = threading.local()
 
     @contextmanager
     def group(self, actor: str, action: str, summary: str = "") -> Iterator[Tx]:
-        """Open (or join, if nested) a ledger group. Commits atomically with all its events."""
+        """Open (or join, if nested) a ledger group; commits atomically with all its events."""
         current: Tx | None = getattr(self._local, "tx", None)
         if current is not None:
             yield current
             return
         group_id = new_id("group")
-        with self.db.write() as conn:
-            tx = Tx(conn, group_id, actor)
+        with self.kdb.transaction() as session:
+            tx = Tx(self.kdb, session, group_id, actor)
             self._local.tx = tx
             try:
                 yield tx
                 if tx.changed:
-                    conn.execute(
-                        "INSERT INTO event_groups(id, ts, actor, action, summary, undoes) "
-                        "VALUES (?, ?, ?, ?, ?, ?)",
-                        (group_id, utcnow(), actor, action, summary, getattr(tx, "undoes", None)),
-                    )
+                    self.kdb["event_groups"].insert_one({
+                        "_id": group_id, "seq": self.kdb.next_seq("groups", session), "ts": utcnow(),
+                        "actor": actor, "action": action, "summary": summary, "undoes": tx.undoes,
+                    }, session=session)
             finally:
                 self._local.tx = None
         if tx.changed:
             self.bus.publish({
-                "type": "ledger",
-                "group_id": group_id,
-                "actor": actor,
-                "action": action,
-                "summary": summary,
-                "tables": sorted({t for t, _ in tx.changed}),
+                "type": "ledger", "group_id": group_id, "actor": actor, "action": action,
+                "summary": summary, "tables": sorted({c for c, _ in tx.changed}),
                 "rows": [r for _, r in tx.changed][:200],
             })
 
     # --- undo / redo ----------------------------------------------------------------------
 
-    def _is_undone(self, conn: sqlite3.Connection, group_id: str) -> bool:
-        reverts = conn.execute("SELECT id FROM event_groups WHERE undoes = ?", (group_id,)).fetchall()
-        return any(not self._is_undone(conn, r[0]) for r in reverts)
+    def _is_undone(self, group_id: str) -> bool:
+        reverts = self.kdb["event_groups"].find({"undoes": group_id}, {"_id": 1})
+        return any(not self._is_undone(r["_id"]) for r in reverts)
 
     def undo(self, group_id: str | None = None) -> str:
-        """Revert ``group_id`` (default: the latest undoable user action). Returns the new group id."""
-        conn = self.db.reader()
+        """Revert ``group_id`` (default: the latest undoable user action)."""
         if group_id is None:
-            marks = ",".join("?" * len(UNDOABLE_ACTORS))
-            rows = conn.execute(
-                f"SELECT id FROM event_groups WHERE actor IN ({marks}) "
-                f"AND action NOT IN ('undo', 'redo') ORDER BY seq DESC LIMIT 200",
-                UNDOABLE_ACTORS,
-            ).fetchall()
-            group_id = next((r[0] for r in rows if not self._is_undone(conn, r[0])), None)
+            rows = self.kdb["event_groups"].find(
+                {"actor": {"$in": UNDOABLE_ACTORS}, "action": {"$nin": ["undo", "redo"]}},
+                {"_id": 1}).sort("seq", -1).limit(200)
+            group_id = next((r["_id"] for r in rows if not self._is_undone(r["_id"])), None)
             if group_id is None:
                 raise NotFound("nothing to undo")
         return self._revert(group_id, "undo")
 
     def redo(self) -> str:
         """Revert the most recent still-active undo. A fresh edit clears the redo stack."""
-        conn = self.db.reader()
-        rows = conn.execute(
-            "SELECT id, action FROM event_groups WHERE actor IN ('user','voice') ORDER BY seq DESC LIMIT 200"
-        ).fetchall()
+        rows = self.kdb["event_groups"].find({"actor": {"$in": UNDOABLE_ACTORS}}).sort("seq", -1).limit(200)
         for r in rows:
             if r["action"] == "redo":
                 continue
             if r["action"] == "undo":
-                if not self._is_undone(conn, r["id"]):
-                    return self._revert(r["id"], "redo")
+                if not self._is_undone(r["_id"]):
+                    return self._revert(r["_id"], "redo")
                 continue
             break
         raise NotFound("nothing to redo")
 
     def _revert(self, group_id: str, action: str) -> str:
-        conn = self.db.reader()
-        grp = conn.execute("SELECT * FROM event_groups WHERE id = ?", (group_id,)).fetchone()
+        grp = self.kdb["event_groups"].find_one({"_id": group_id})
         if grp is None:
             raise NotFound(f"event group {group_id} not found")
-        if self._is_undone(conn, group_id):
+        if self._is_undone(group_id):
             raise Conflict("that action is already undone")
-        events = conn.execute(
-            "SELECT * FROM events WHERE group_id = ? ORDER BY seq DESC", (group_id,)
-        ).fetchall()
+        events = list(self.kdb["events"].find({"group_id": group_id}).sort("seq", -1))
         summary = f"{action} {grp['action']}" + (f": {grp['summary']}" if grp["summary"] else "")
         with self.group("user", action, summary) as tx:
-            tx.undoes = group_id  # type: ignore[attr-defined]
+            tx.undoes = group_id
             for ev in events:
-                table, row_id = ev["tbl"], ev["row_id"]
-                before, after = loads(ev["before"]), loads(ev["after"])
-                current = tx._row(table, row_id)
+                coll, doc_id, before, after = ev["coll"], ev["doc_id"], ev["before"], ev["after"]
+                current = tx.get(coll, doc_id)
+                later = Conflict(f"{coll} {doc_id} changed after this action; undo later changes first")
                 if ev["op"] == "insert":
                     if current != after:
-                        raise Conflict(f"{table} {row_id} changed after this action; undo later changes first")
-                    tx.delete(table, row_id)
+                        raise later
+                    tx.delete(coll, doc_id)
                 elif ev["op"] == "update":
-                    changed_cols = [k for k in after if before.get(k) != after.get(k) and k != "updated_at"]
-                    if current is None or any(current.get(k) != after.get(k) for k in changed_cols):
-                        raise Conflict(f"{table} {row_id} changed after this action; undo later changes first")
-                    tx.update(table, row_id, {k: before[k] for k in changed_cols})
-                else:  # delete
+                    cols = [k for k in after if before.get(k) != after.get(k) and k != "updated_at"]
+                    if current is None or any(current.get(k) != after.get(k) for k in cols):
+                        raise later
+                    tx.update(coll, doc_id, {k: before.get(k) for k in cols})
+                else:
                     if current is not None:
-                        raise Conflict(f"{table} {row_id} was re-created after this action")
-                    tx.insert(table, before)
+                        raise Conflict(f"{coll} {doc_id} was re-created after this action")
+                    tx.insert(coll, before)
             return tx.group_id
 
     # --- history (FR-10) ------------------------------------------------------------------
 
-    def history(self, table: str, row_id: str) -> list[dict[str, Any]]:
-        rows = self.db.reader().execute(
-            "SELECT e.seq, e.ts, e.op, e.before, e.after, g.id AS group_id, g.actor, g.action, g.summary "
-            "FROM events e JOIN event_groups g ON g.id = e.group_id "
-            "WHERE e.tbl = ? AND e.row_id = ? ORDER BY e.seq",
-            (table, row_id),
-        ).fetchall()
-        return [
-            {**dict(r), "before": loads(r["before"]), "after": loads(r["after"])} for r in rows
-        ]
+    def history(self, coll: str, doc_id: str) -> list[dict[str, Any]]:
+        events = list(self.kdb["events"].find({"coll": coll, "doc_id": doc_id}).sort("seq", 1))
+        groups = {g["_id"]: g for g in self.kdb["event_groups"].find(
+            {"_id": {"$in": list({e["group_id"] for e in events})}})}
+        out = []
+        for e in events:
+            g = groups.get(e["group_id"], {})
+            out.append({"seq": e["seq"], "ts": e["ts"], "op": e["op"], "before": e["before"],
+                        "after": e["after"], "group_id": e["group_id"], "actor": g.get("actor", "?"),
+                        "action": g.get("action", "?"), "summary": g.get("summary", "")})
+        return out
 
     def recent_groups(self, limit: int = 50) -> list[dict[str, Any]]:
-        conn = self.db.reader()
-        rows = conn.execute(
-            "SELECT g.*, (SELECT COUNT(*) FROM events e WHERE e.group_id = g.id) AS n_events "
-            "FROM event_groups g ORDER BY g.seq DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-        return [{**dict(r), "undone": self._is_undone(conn, r["id"])} for r in rows]
+        groups = list(self.kdb["event_groups"].find().sort("seq", -1).limit(limit))
+        counts = {r["_id"]: r["n"] for r in self.kdb["events"].aggregate([
+            {"$match": {"group_id": {"$in": [g["_id"] for g in groups]}}},
+            {"$group": {"_id": "$group_id", "n": {"$sum": 1}}},
+        ])}
+        return [{**to_row(g), "n_events": counts.get(g["_id"], 0), "undone": self._is_undone(g["_id"])}  # type: ignore[dict-item]
+                for g in groups]
