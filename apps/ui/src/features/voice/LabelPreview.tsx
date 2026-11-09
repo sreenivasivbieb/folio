@@ -11,6 +11,7 @@ interface LabelPlan {
   questions: { id: string; text: string; field: "type" | "entity_id"; options: { label: string; value: string }[] }[];
   unparsed: string[];
   ops: unknown[];
+  engine?: string; // who understood it: the connected model, or the offline rules
 }
 
 function OtherType({ onPick }: { onPick: (v: string) => void }) {
@@ -84,6 +85,12 @@ export function LabelPreview({ label, actions }: { label: Label; actions: Return
       }
     >
       <Transcript label={label} actions={actions} />
+      {plan.engine && (
+        <div className="tiny muted row" style={{ margin: "-2px 0 8px", gap: 5 }}>
+          <Icon name={plan.engine.startsWith("rules") ? "layers" : "sparkles"} size={12} />
+          {plan.engine.startsWith("rules") ? `Understood by Folio's offline rules${plan.engine.includes("(") ? ` ${plan.engine.slice(plan.engine.indexOf("("))}` : ""}` : `Understood by ${plan.engine}`}
+        </div>
+      )}
       {plan.preview.map((line) => (
         <div key={line} className="preview-line"><Icon name="plus" size={13} style={{ color: "var(--ok)" }} />{line}</div>
       ))}
@@ -107,7 +114,7 @@ export function LabelPreview({ label, actions }: { label: Label; actions: Return
       {plan.ops.length === 0 && (
         <div className="callout" style={{ marginTop: 10 }}>
           <Icon name="info" />
-          <span>Nothing to apply. Try “this is the Acme contract”, “Priya owns it”, “signed March 3”, “it is a Course”, “this is wrong”, “merge these two”.</span>
+          <span>Nothing to apply yet. Select a file, entity or fact first, then describe it in your own words — e.g. “lexsi hackathon video demo”, “Priya owns it”, “this is wrong”. Connect an AI model in Settings to understand any phrasing or language.</span>
         </div>
       )}
     </Modal>

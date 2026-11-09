@@ -26,7 +26,7 @@ function describe(sel: Selection, sourceName: (id: string) => string): string | 
 }
 
 const EXAMPLES: Record<Selection["kind"], string> = {
-  source: "This PDF is the Acme contract, Priya owns it, signed March 3",
+  source: "Describe it your way — e.g. lexsi hackathon video demo, made by Priya",
   entity: "Priya leads it · it is a Course · merge these two",
   claim: "This is wrong, the owner is Priya",
   none: "Select a file, entity or fact — then say or type what it is",

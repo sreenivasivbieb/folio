@@ -24,6 +24,7 @@ from ..store import repo
 from ..store.index_db import IndexDB, utcnow
 from ..store.local import KnowledgeDB
 from .label_parser import LabelContext, RuleLabelParser, answer_question
+from .llm_label_parser import LLMLabelParser
 from .recorder import MicRecorder
 
 BEAM_SIZE = 3  # short commands: near-greedy decoding keeps end-of-speech -> preview fast
@@ -31,7 +32,8 @@ BEAM_SIZE = 3  # short commands: near-greedy decoding keeps end-of-speech -> pre
 
 class LabelService:
     def __init__(self, *, kdb: KnowledgeDB, index: IndexDB, ledger: Ledger, knowledge: KnowledgeService,
-                 learning: CorrectionStore, transcriber: Transcriber, audio_dir: Path) -> None:
+                 learning: CorrectionStore, transcriber: Transcriber, audio_dir: Path,
+                 llm: Any = None) -> None:
         self.kdb = kdb
         self.index = index
         self.ledger = ledger
@@ -39,7 +41,8 @@ class LabelService:
         self.learning = learning
         self.transcriber = transcriber
         self.audio_dir = audio_dir
-        self.parser = RuleLabelParser()
+        self.rules = RuleLabelParser()
+        self.llm = llm
         self.recorder = MicRecorder()
         self._target: tuple[str, list[str]] = ("none", [])
         self.focus: tuple[str, list[str]] = ("none", [])  # what the UI has selected right now
@@ -92,6 +95,17 @@ class LabelService:
 
     # --- plan -----------------------------------------------------------------------------
 
+    def _parse(self, transcript: str, ctx: LabelContext) -> dict[str, Any]:
+        """The connected model understands free-form labels; the rule grammar is the offline
+        default and the fallback. Cloud models are only used when cloud is enabled."""
+        if self.llm is not None and getattr(self.llm, "configured", False):
+            try:
+                ensure_allowed(self.kdb, self.llm)
+            except Exception:
+                return {**self.rules.parse(transcript, ctx), "engine": "rules (cloud AI is off)"}
+            return LLMLabelParser(self.llm, self.rules).parse(transcript, ctx)
+        return {**self.rules.parse(transcript, ctx), "engine": "rules"}
+
     def _context(self, target_kind: str, target_ids: list[str]) -> LabelContext:
         _v, schema = self.knowledge.schema()
         ctx = LabelContext(target_kind=target_kind, target_ids=target_ids, schema=schema,
@@ -137,7 +151,7 @@ class LabelService:
         if not transcript:
             raise InvalidInput("label is empty")
         ctx = self._context(target_kind, target_ids)
-        parsed = self.parser.parse(transcript, ctx)
+        parsed = self._parse(transcript, ctx)
         now = utcnow()
         with self.ledger.group("system", "label.preview", transcript[:80]) as tx:
             tx.insert("labels", {
@@ -154,7 +168,7 @@ class LabelService:
         transcript = transcript.strip()
         if not transcript:
             raise InvalidInput("label is empty")
-        parsed = self.parser.parse(transcript, self._context(label.target_kind, label.target_ids))
+        parsed = self._parse(transcript, self._context(label.target_kind, label.target_ids))
         with self.ledger.group("system", "label.revise", transcript[:80]) as tx:
             tx.update("labels", label_id, {"transcript": transcript, "parsed": parsed})
         return repo.get_label(self.kdb, label_id)  # type: ignore[return-value]

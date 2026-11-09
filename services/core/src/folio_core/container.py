@@ -132,7 +132,7 @@ def build_container(settings: Settings, providers: Providers | None = None,
         resolver=EntityResolver(knowledge, providers.embedder, index), extractor=pick_extractor, queue=queue,
     )
     labels = LabelService(kdb=kdb, index=index, ledger=ledger, knowledge=knowledge, learning=learning,
-                          transcriber=providers.stt, audio_dir=settings.audio_dir)
+                          transcriber=providers.stt, audio_dir=settings.audio_dir, llm=llm)
     search = HybridSearch(index, kdb, providers.embedder, vectors)
 
     def download_speech_model(job: Job) -> str:

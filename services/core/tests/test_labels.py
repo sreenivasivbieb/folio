@@ -91,10 +91,60 @@ def test_reject_and_correct_a_claim_by_voice(container):
     assert repo.get_entity(conn, owners[0].subject_id).name == "Priya"
 
 
-def test_unparsed_clauses_are_reported_not_guessed(container, pdf_source):
-    label = container.labels.preview("blah blah something", "source", [pdf_source.id])
+def test_free_text_about_a_file_is_kept_as_its_description(container, pdf_source):
+    label = container.labels.preview("lexsi hackthhon video demo", "source", [pdf_source.id])
+    plan = label.parsed
+    assert not plan["unparsed"] and not plan["questions"]
+    assert {"op": "attribute", "attribute": "description", "value": "lexsi hackthhon video demo"}.items() <= plan["ops"][-1].items()
+    assert container.labels.confirm(label.id).status == "committed"
+    assert container.search.files("hackthhon", [])  # the label makes the file findable
+
+
+def test_unparsed_clauses_are_reported_not_guessed_without_a_selection(container):
+    label = container.labels.preview("blah blah something", "none", [])
     assert label.parsed["unparsed"] == ["blah blah something"]
     assert label.parsed["ops"] == []
+
+
+class _LabelModel:
+    """Stands in for a connected model that understands free-form labels."""
+    configured, is_local, model_id = True, True, "test:model"
+
+    def __init__(self, answer):
+        self.answer, self.calls = answer, 0
+
+    def complete_json(self, system, user, schema):
+        self.calls += 1
+        if isinstance(self.answer, Exception):
+            raise self.answer
+        return self.answer
+
+
+def test_model_understands_free_form_labels(container, pdf_source):
+    import json
+
+    container.labels.llm = _LabelModel(json.dumps({"items": [
+        {"kind": "attribute", "subject": "THIS", "predicate": "description", "value": "Lexsi hackathon video demo"},
+        {"kind": "tag", "name": "Lexsi", "type": "Organization"},
+        {"kind": "tag", "name": "Lexsi Hackathon", "type": "Event"},
+        {"kind": "fact", "subject": "THIS", "predicate": "presented_at", "object": "Lexsi Hackathon"},
+    ]}))
+    label = container.labels.preview("lexsi hackthhon video demo", "source", [pdf_source.id])
+    plan = label.parsed
+    assert plan["engine"] == "test:model" and not plan["questions"]
+    types = {r["name"]: r["type"] for r in plan["refs"].values()}
+    assert types["Lexsi"] == "Organization" and types["Lexsi Hackathon"] == "Event"
+    assert container.labels.confirm(label.id).status == "committed"
+    assert {e.name for e in repo.search_entities(container.kdb, "lexsi")} == {"Lexsi", "Lexsi Hackathon"}
+
+
+def test_bad_or_unreachable_model_falls_back_to_rules(container, pdf_source):
+    container.labels.llm = _LabelModel("not json at all")
+    plan = container.labels.preview("tag this as finance", "source", [pdf_source.id]).parsed
+    assert plan["engine"].startswith("rules") and any(r["name"] == "finance" for r in plan["refs"].values())
+    container.labels.llm = _LabelModel(RuntimeError("connection refused"))
+    plan = container.labels.preview("tag this as finance", "source", [pdf_source.id]).parsed
+    assert plan["engine"] == "rules (model unavailable)"
 
 
 def test_voice_without_speech_model_is_a_clear_error(container):

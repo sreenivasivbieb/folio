@@ -204,7 +204,18 @@ class _Plan:
                 del self.ops[n:]
                 self.unparsed.append(f"{o} ({exc})")
                 return
+        if self._free_text(o):
+            return
         self.unparsed.append(o)
+
+    def _free_text(self, o: str) -> bool:
+        """Anything else said about a file is kept as its description (searchable, editable)
+        instead of being thrown away: "lexsi hackathon video demo"."""
+        if self.ctx.target_kind not in ("source", "chunk") or not self.ctx.source_id or len(o.strip()) < 2:
+            return False
+        key = self.this_ref()
+        self.ops.append({"op": "attribute", "entity": key, "attribute": "description", "value": o.strip(), "dated": False})
+        return True
 
     # --- topics / tags --------------------------------------------------------------------
 
