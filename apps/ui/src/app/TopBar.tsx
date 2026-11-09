@@ -33,8 +33,8 @@ export function TopBar() {
       </div>
       <button type="button" className="searchbox" onClick={() => ui.set({ modal: "search" })}>
         <Icon name="search" />
-        <span className="label">Search people, topics, passages…</span>
-        <span className="kbd">Ctrl K</span>
+        <span className="label">Search files, topics, people, text…</span>
+        <span className="kbd">/</span>
       </button>
       <span className="spacer" />
       <WorkIndicator />

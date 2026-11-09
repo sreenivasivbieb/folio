@@ -14,6 +14,9 @@ export function useShortcuts(): void {
       if (mod && e.key.toLowerCase() === "k") {
         e.preventDefault();
         ui.set({ modal: "search" });
+      } else if (e.key === "/" && !mod && !typing) {
+        e.preventDefault(); // "/" opens search, like most apps
+        ui.set({ modal: "search" });
       } else if (mod && e.key.toLowerCase() === "z" && !typing) {
         e.preventDefault();
         if (e.shiftKey) redo.mutate(undefined);

@@ -1,89 +1,129 @@
-/** Ctrl+K: entity query by text. Entities first, then matching passages (hybrid search). */
-import { useState } from "react";
+/** Ctrl+K or "/": one box for everything — files (names, descriptions, labels), people and topics,
+ * and passages inside files. Suggestions before typing; arrow keys move through all results. */
+import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useSearch } from "@/api/queries";
 import { TypePill } from "@/components/Badges";
-import { Icon } from "@/components/Icon";
+import { Icon, kindIcon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
 import { basename, locatorLabel } from "@/lib/format";
 import { openEvidence, selectEntity, selectSource, ui } from "@/state/selection";
+
+/** Wrap the typed words in <mark> (case-insensitive). */
+function highlight(text: string, q: string): ReactNode {
+  const words = q.trim().split(/\s+/).filter((w) => w.length > 1).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  if (!words.length) return text;
+  const parts = text.split(new RegExp(`(${words.join("|")})`, "ig"));
+  return parts.map((p, i) => (i % 2 ? <mark key={i}>{p}</mark> : <Fragment key={i}>{p}</Fragment>));
+}
+
+type Item = { key: string; group: string; open: () => void; render: (active: boolean) => ReactNode };
 
 export function SearchPalette() {
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
   const { data, isFetching } = useSearch(q);
-  const entities = data?.entities ?? [];
-  const passages = data?.passages ?? [];
-  const files = data?.files ?? [];
   const close = () => ui.set({ modal: "none" });
-  const pickEntity = (id: string) => {
-    selectEntity(id);
-    close();
-  };
+  const typed = q.trim().length > 1;
+  const list = useRef<HTMLDivElement>(null);
 
+  const items = useMemo<Item[]>(() => {
+    const out: Item[] = [];
+    for (const f of data?.files ?? []) {
+      out.push({
+        key: `f:${f.source_id}`, group: typed ? "Files" : "Recent files",
+        open: () => { selectSource(f.source_id); close(); },
+        render: () => (
+          <>
+            <span className="palette-icon"><Icon name={kindIcon(f.kind)} size={14} /></span>
+            <div className="grow" style={{ minWidth: 0 }}>
+              <div className="ellipsis"><b>{highlight(basename(f.path), q)}</b></div>
+              {typed && f.via !== "file name" && <div className="tiny muted ellipsis">{highlight(f.via, q)}</div>}
+            </div>
+            {f.status !== "indexed" && <span className={`badge ${f.status}`}>{f.status}</span>}
+          </>
+        ),
+      });
+    }
+    for (const e of data?.entities ?? []) {
+      out.push({
+        key: `e:${e.id}`, group: typed ? "People, topics & more" : "In your knowledge",
+        open: () => { selectEntity(e.id); close(); },
+        render: () => (
+          <>
+            <span className="palette-icon"><Icon name="graph" size={14} /></span>
+            <b className="grow ellipsis">{highlight(e.name, q)}</b>
+            <TypePill type={e.type} />
+          </>
+        ),
+      });
+    }
+    for (const p of data?.passages ?? []) {
+      out.push({
+        key: `p:${p.chunk_id}`, group: "Inside files",
+        open: () => {
+          openEvidence({ id: p.chunk_id, claim_id: "", source_id: p.source_id, chunk_id: p.chunk_id, locator: p.locator as never, quote: p.text.slice(0, 160) });
+          close();
+        },
+        render: () => (
+          <>
+            <span className="palette-icon"><Icon name="quote" size={14} /></span>
+            <div className="grow" style={{ minWidth: 0 }}>
+              <div className="tiny muted ellipsis">{basename(p.path)} · {locatorLabel(p.locator as never)}</div>
+              <div className="small palette-snippet">{highlight(p.text.slice(0, 220), q)}{p.text.length > 220 ? "…" : ""}</div>
+            </div>
+          </>
+        ),
+      });
+    }
+    return out;
+  }, [data, q, typed]);
+
+  useEffect(() => setActive(0), [q]);
+  useEffect(() => {
+    list.current?.querySelector(".palette-item.active")?.scrollIntoView({ block: "nearest" });
+  }, [active]);
+
+  let lastGroup = "";
   return (
     <Modal onClose={close} bare>
       <div className="palette-input">
         <Icon name={isFetching ? "loader" : "search"} spin={isFetching} size={18} className="muted" />
         <input
           autoFocus
-          placeholder="Search people, topics, organisations, passages…"
+          placeholder="Search files, descriptions, people, topics and text…"
           value={q}
-          onChange={(e) => { setQ(e.target.value); setActive(0); }}
+          onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "ArrowDown") setActive((i) => Math.min(i + 1, entities.length - 1));
-            if (e.key === "ArrowUp") setActive((i) => Math.max(i - 1, 0));
-            if (e.key === "Enter" && entities[active]) pickEntity(entities[active].id);
+            if (e.key === "ArrowDown") { e.preventDefault(); setActive((i) => Math.min(i + 1, items.length - 1)); }
+            if (e.key === "ArrowUp") { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)); }
+            if (e.key === "Enter" && items[active]) items[active].open();
           }}
         />
         <span className="kbd">Esc</span>
       </div>
-      <div style={{ overflow: "auto", maxHeight: "60vh" }}>
-        {q.trim().length < 2 && <div className="empty-inline">Type at least two characters. Results come from topics, labels, file names and the full text of every file.</div>}
-        {entities.length > 0 && (
-          <div className="palette-group">
-            <div className="label">Entities</div>
-            {entities.map((e, i) => (
-              <div key={e.id} className={`palette-item ${i === active ? "active" : ""}`} onClick={() => pickEntity(e.id)} onMouseEnter={() => setActive(i)}>
-                <b className="grow ellipsis">{e.name}</b>
-                <TypePill type={e.type} />
-                {e.status !== "verified" && <span className={`badge ${e.status}`}>{e.status}</span>}
+      <div ref={list} style={{ overflow: "auto", maxHeight: "62vh", paddingBottom: 6 }}>
+        {items.map((it, i) => {
+          const header = it.group !== lastGroup ? it.group : null;
+          lastGroup = it.group;
+          return (
+            <Fragment key={it.key}>
+              {header && <div className="palette-group"><div className="label">{header}</div></div>}
+              <div className={`palette-item ${i === active ? "active" : ""}`} onClick={it.open} onMouseEnter={() => setActive(i)}>
+                {it.render(i === active)}
               </div>
-            ))}
+            </Fragment>
+          );
+        })}
+        {!items.length && !isFetching && (
+          <div className="empty-inline">
+            {typed ? <>No matches for “{q.trim()}”. Partial words and small typos are fine — try fewer words.</> : "Add files to Folio to search them here."}
           </div>
         )}
-        {files.length > 0 && (
-          <div className="palette-group">
-            <div className="label">Files</div>
-            {files.map((f) => (
-              <div key={f.source_id} className="palette-item" onClick={() => { selectSource(f.source_id); close(); }}>
-                <Icon name="file" size={14} className="muted" />
-                <div className="grow ellipsis">
-                  <b>{basename(f.path)}</b>
-                  <div className="tiny muted ellipsis">{f.via === "file name" ? f.path : `${f.via} · ${f.path}`}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        {passages.length > 0 && (
-          <div className="palette-group">
-            <div className="label">Passages</div>
-            {passages.map((p) => (
-              <div key={p.chunk_id} className="palette-item" style={{ alignItems: "flex-start" }}
-                onClick={() => {
-                  openEvidence({ id: p.chunk_id, claim_id: "", source_id: p.source_id, chunk_id: p.chunk_id, locator: p.locator as never, quote: p.text.slice(0, 160) });
-                  close();
-                }}>
-                <Icon name="quote" size={14} className="muted" style={{ marginTop: 2 }} />
-                <div className="grow">
-                  <div className="tiny muted">{basename(p.path)} · {locatorLabel(p.locator as never)}</div>
-                  <div className="small">{p.text.slice(0, 220)}{p.text.length > 220 ? "…" : ""}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        {q.trim().length > 1 && data && !entities.length && !files.length && !passages.length && <div className="empty-inline">No matches.</div>}
+      </div>
+      <div className="palette-foot tiny muted">
+        <span><span className="kbd">↑</span><span className="kbd">↓</span> move</span>
+        <span><span className="kbd">Enter</span> open</span>
+        <span>Searches names, descriptions, labels and the text inside files</span>
       </div>
     </Modal>
   );

@@ -179,8 +179,8 @@ export function useSchema() {
 export function useSearch(q: string) {
   const { client } = useApi();
   return useQuery({
-    queryKey: ["search", q],
-    enabled: q.trim().length > 1,
+    queryKey: ["search", q.trim()],
+    placeholderData: (prev) => prev, // keep showing results while the next ones load
     queryFn: async () => unwrap(await client.GET("/api/search", { params: { query: { q, k: 10 } } })),
   });
 }

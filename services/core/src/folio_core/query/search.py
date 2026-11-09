@@ -18,8 +18,13 @@ _TOKEN = re.compile(r"\w+", re.UNICODE)
 
 
 def fts_query(q: str) -> str | None:
+    """Prefix matching, so a partly typed word already finds passages ("hack" -> hackathon)."""
     tokens = [t for t in _TOKEN.findall(q) if len(t) > 1]
-    return " OR ".join(f'"{t}"' for t in tokens) or None
+    return " OR ".join(f'"{t}"*' for t in tokens) or None
+
+
+def _basename(path: str) -> str:
+    return path.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
 
 
 class HybridSearch:
@@ -108,17 +113,30 @@ class HybridSearch:
                 for e in c.get("evidence", []):
                     if e.get("label_id"):  # a label said it about this file
                         add(e.get("source_id"), hit)
-        # 2. Label transcripts that mention the words.
         words = [w for w in _TOKEN.findall(q.lower()) if len(w) > 1]
+        pattern = "".join(f"(?=.*{re.escape(w)})" for w in words)
+        # 1b. Descriptions, titles and other values said about a file ("lexsi hackathon video demo").
         if words:
-            pattern = "".join(f"(?=.*\\b{re.escape(w)})" for w in words)
+            described = list(self.kdb["claims"].find({"kind": "attribute", "status": {"$ne": "rejected"},
+                                                      "value": {"$regex": pattern, "$options": "i"}}).limit(200))
+            subjects = list({c["subject_id"] for c in described})
+            by_subject: dict[str, list[str]] = {}
+            for c in self.kdb["claims"].find({"predicate": REPRESENTED_BY, "subject_id": {"$in": subjects},
+                                              "status": {"$ne": "rejected"}}):
+                by_subject.setdefault(c["subject_id"], []).append(c["value"])
+            for c in described:
+                for sid in by_subject.get(c["subject_id"], []):
+                    add(sid, f"{c['predicate'].replace('_', ' ')}: {str(c['value'])[:60]}")
+        # 2. Label transcripts that mention the words.
+        if words:
             for lab in self.kdb["labels"].find({"transcript": {"$regex": pattern, "$options": "i"},
                                                 "status": "committed"}).limit(200):
                 if lab.get("target_kind") == "source":
                     for sid in lab.get("target_ids", []):
                         add(sid, f"label: {lab['transcript'][:60]}")
-        # 3. File names.
-        like = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        # 3. File names: every typed word, in any order.
+        first = words[0] if words else q
+        like = "%" + first.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
         with self.kdb._read_guard():
             rows = self.kdb._reader().execute(
                 "SELECT id FROM documents WHERE collection = 'sources' AND "
@@ -133,9 +151,38 @@ class HybridSearch:
             src = sources.get(sid)
             if src is None or src.status.value in repo.HIDDEN_SOURCE_STATUSES:
                 continue
-            if hit["via"] == "file name" and q.lower() not in src.path.rsplit("/", 1)[-1].rsplit("\\", 1)[-1].lower():
-                continue  # matched a folder name only
+            if hit["via"] == "file name" and not all(w in _basename(src.path).lower() for w in (words or [q.lower()])):
+                continue  # matched a folder name, or not every word
             out.append({**hit, "path": src.path, "kind": src.kind.value, "status": src.status.value})
             if len(out) >= k:
                 break
+        if len(out) < 3 and len(q) >= 3:  # typos: "hackthon" -> hackathon-demo.mp4
+            out += self._similar_names(q, {h["source_id"] for h in out}, k - len(out))
         return out
+
+    def _similar_names(self, q: str, skip: set[str], k: int) -> list[dict[str, Any]]:
+        import difflib
+
+        live = [d for d in self.kdb["sources"].find({"status": {"$nin": repo.HIDDEN_SOURCE_STATUSES}},
+                                                      {"path": 1, "kind": 1, "status": 1}).limit(20000)
+                if d["_id"] not in skip]
+        stems = {}
+        for d in live:
+            stem = re.sub(r"\.[^.]+$", "", _basename(d["path"])).lower()
+            for part in [stem, *re.split(r"[\s_.-]+", stem)]:
+                if len(part) >= 3:
+                    stems.setdefault(part, []).append(d)
+        hits: dict[str, dict[str, Any]] = {}
+        for word in [w for w in _TOKEN.findall(q.lower()) if len(w) >= 3] or [q.lower()]:
+            for match in difflib.get_close_matches(word, list(stems), n=k, cutoff=0.75):
+                for d in stems[match]:
+                    hits.setdefault(d["_id"], {"source_id": d["_id"], "via": f"similar name: {match}",
+                                               "path": d["path"], "kind": d.get("kind", "other"),
+                                               "status": d.get("status", "")})
+        return list(hits.values())[:k]
+
+    def recent_files(self, k: int = 8) -> list[dict[str, Any]]:
+        """What the search box shows before anything is typed."""
+        docs = self.kdb["sources"].find({"status": {"$nin": repo.HIDDEN_SOURCE_STATUSES}}).sort("updated_at", -1).limit(k)
+        return [{"source_id": d["_id"], "via": "recent", "path": d["path"], "kind": d.get("kind", "other"),
+                 "status": d.get("status", "")} for d in docs]

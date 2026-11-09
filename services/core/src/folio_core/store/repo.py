@@ -184,7 +184,22 @@ def search_entities(kdb: KnowledgeDB, q: str = "", types: list[str] | None = Non
         exact = any(a["normalized"] == norm for a in d.get("aliases", [])) if norm else False
         return (0 if exact else 1, -counts.get(d["_id"], 0), d["name"].lower())
 
-    return [entity_from_doc(d) for d in sorted(docs, key=rank)[:limit]]
+    found = [entity_from_doc(d) for d in sorted(docs, key=rank)[:limit]]
+    if q and len(found) < 3 and len(norm) >= 3:  # typos: "lexi hackthon" -> Lexsi Hackathon
+        import difflib
+
+        seen = {e.id for e in found}
+        pool = list(kdb["entities"].find({k: v for k, v in query.items() if k != "aliases.normalized"}).limit(5000))
+        names: dict[str, dict[str, Any]] = {}
+        for d in pool:
+            for a in d.get("aliases", []):
+                names.setdefault(a["normalized"], d)
+        for match in difflib.get_close_matches(norm, list(names), n=limit, cutoff=0.72):
+            d = names[match]
+            if d["_id"] not in seen:
+                seen.add(d["_id"])
+                found.append(entity_from_doc(d))
+    return found[:limit]
 
 
 # --- claims & evidence ----------------------------------------------------------------------

@@ -449,3 +449,15 @@ textarea.schema { width: 100%; min-height: 46vh; font-family: var(--mono); font-
 .drop-overlay b { color: var(--text); font-size: 17px; font-weight: 600; letter-spacing: -0.02em; }
 .drop-overlay span { color: var(--text-3); font-size: 12px; }
 @media (max-width: 640px) { .choice-grid { grid-template-columns: 1fr; } }
+
+
+/* ---- search palette ---------------------------------------------------------------------- */
+.palette-item { margin: 0 8px; }
+.palette-icon { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; flex: none;
+  background: var(--card); color: var(--text-2); box-shadow: inset 0 0 0 1px var(--hairline); }
+.palette-item.active .palette-icon { background: var(--violet-soft); color: var(--violet); box-shadow: none; }
+.palette-snippet { color: var(--text-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.palette-item mark { background: rgb(124 92 246 / 16%); color: inherit; border-radius: 3px; padding: 0 1px; }
+.palette-foot { display: flex; gap: 14px; align-items: center; padding: 9px 16px; border-top: 1px solid var(--border); background: var(--card); }
+.palette-foot .kbd { margin-right: 3px; }
+.palette-foot > span:last-child { margin-left: auto; }
