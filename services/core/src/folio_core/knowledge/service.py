@@ -44,8 +44,20 @@ class KnowledgeService:
     # --- type hints (schema) --------------------------------------------------------------
 
     def ensure_schema(self, pack: str = "default") -> None:
-        if self.kdb["schema_versions"].find_one() is None:
+        current = self.kdb["schema_versions"].find_one(sort=[("version", -1)])
+        if current is None:
             self._store_schema(load_pack(pack), actor="system")
+            return
+        # Additive upgrade of the built-in pack: new types/relations appear in older projects;
+        # nothing the user defined or changed is removed or overwritten.
+        if current.get("name") == pack:
+            installed, latest = SchemaDef.model_validate(current["definition"]), load_pack(pack)
+            missing_types = {k: v for k, v in latest.entity_types.items() if k not in installed.entity_types}
+            missing_rels = {k: v for k, v in latest.relation_types.items() if k not in installed.relation_types}
+            if missing_types or missing_rels:
+                self._store_schema(installed.model_copy(update={
+                    "entity_types": {**installed.entity_types, **missing_types},
+                    "relation_types": {**installed.relation_types, **missing_rels}}), actor="system")
 
     def schema(self) -> tuple[int, SchemaDef]:
         return repo.active_schema(self.kdb)

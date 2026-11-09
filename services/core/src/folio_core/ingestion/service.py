@@ -37,7 +37,7 @@ from ..store.local import KnowledgeDB
 from ..store.vectors import VectorIndex
 from .base import ParseContext
 from .chunker import chunk_units
-from .locations import DEFAULT_EXCLUSIONS, SYSTEM_EXCLUSIONS
+from .locations import DEFAULT_EXCLUSIONS, SYSTEM_EXCLUSIONS, is_hidden
 from .registry import ParserRegistry
 from .sandbox import run_sandboxed
 
@@ -149,7 +149,7 @@ class IngestionService:
                   if r.id != root.id and Path(r.path) != base and base in Path(r.path).parents}
         for dirpath, dirnames, filenames in os.walk(base, onerror=on_error, followlinks=False):
             d = Path(dirpath)
-            dirnames[:] = [n for n in dirnames if (root.include_hidden or not n.startswith("."))
+            dirnames[:] = [n for n in dirnames if (root.include_hidden or not is_hidden(d / n, n))
                           and (d / n) not in nested
                           and not (d / n).is_symlink() and not self._excluded(d / n, root)
                           and (d != Path("/run") or n == "media")]
@@ -157,7 +157,7 @@ class IngestionService:
                 p = d / n
                 if p in nested:
                     continue
-                if ((root.include_hidden or not n.startswith(".")) and not p.is_symlink()
+                if ((root.include_hidden or not is_hidden(p, n)) and not p.is_symlink()
                         and not self._excluded(p, root) and p.is_file()):
                     if not os.access(p, os.R_OK):
                         if on_error:

@@ -44,6 +44,11 @@ entity_types:
     phrases: [decision]
     attributes:
       decided_on: { type: date, phrases: [decided] }
+  Topic:
+    description: A subject, theme or tag a file is about.
+    color: "#14B8A6"
+    phrases: [topic, subject, theme, tag, category]
+    attributes: {}
   Document:
     description: A file or document as a whole.
     color: "#6B7280"
@@ -81,8 +86,8 @@ relation_types:
   about:
     description: Concerns or relates to.
     source: ["*"]
-    target: [Project, Contract, Organization]
-    phrases: [is about, relates to, concerns]
+    target: [Topic, Project, Contract, Organization]
+    phrases: [is about, relates to, is related to, concerns, covers]
   leads:
     source: [Person]
     target: [Project, Organization]
