@@ -93,3 +93,14 @@ def test_windows_scan_locations_list_drives(monkeypatch, tmp_path):
     found = locations.scan_locations(home=tmp_path)
     assert [loc["kind"] for loc in found] == ["home", "drive", "drive"]
     assert all(loc["path"] != "/" for loc in found)
+
+
+def test_old_finished_jobs_are_pruned_but_failures_kept(container):
+    q = container.queue
+    done = q.enqueue("index_source", {"source_id": "a"}, dedupe_key="index:a")
+    failed = q.enqueue("index_source", {"source_id": "b"}, dedupe_key="index:b")
+    with container.index.write() as conn:
+        conn.execute("UPDATE jobs SET status='done', updated_at='2020-01-01T00:00:00.000+00:00' WHERE id=?", (done,))
+        conn.execute("UPDATE jobs SET status='failed', updated_at='2020-01-01T00:00:00.000+00:00' WHERE id=?", (failed,))
+    assert q.prune() == 1
+    assert q.get(done) is None and q.get(failed) is not None

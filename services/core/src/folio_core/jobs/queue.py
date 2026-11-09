@@ -122,6 +122,16 @@ class JobQueue:
             )
         self._publish(job_id)
 
+    def prune(self, days: int = 30) -> int:
+        """Forget finished jobs older than ``days`` (every file adds a few, every launch a scan).
+        Failed jobs stay until retried or dismissed, so problems remain visible."""
+        from datetime import UTC, datetime, timedelta
+
+        cutoff = (datetime.now(UTC) - timedelta(days=days)).isoformat(timespec="milliseconds")
+        with self.db.write() as conn:
+            return conn.execute("DELETE FROM jobs WHERE status IN ('done', 'cancelled') AND updated_at < ?",
+                                (cutoff,)).rowcount
+
     def recover(self) -> int:
         """Re-queue jobs interrupted by a crash or forced kill (NFR: reliability)."""
         with self.db.write() as conn:

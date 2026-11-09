@@ -74,6 +74,7 @@ class Container:
         return self.extraction.extractor()
 
     def start(self, background_scan: bool = True) -> None:
+        self.queue.prune()
         for db in (self.kdb, self.index):  # before any worker writes: reclaim disk space
             db.compact()
         self.vault.root()  # Folio's own storage folder is the only place it indexes
