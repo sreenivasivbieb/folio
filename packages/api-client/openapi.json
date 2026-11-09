@@ -4598,6 +4598,39 @@
         "title": "Extractor",
         "description": "Who or what made a claim (FR-10 provenance)."
       },
+      "FileHit": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "via": {
+            "type": "string",
+            "title": "Via"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_id",
+          "path",
+          "kind",
+          "status",
+          "via"
+        ],
+        "title": "FileHit"
+      },
       "FileRef": {
         "properties": {
           "id": {
@@ -5694,6 +5727,14 @@
             },
             "type": "array",
             "title": "Passages"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/FileHit"
+            },
+            "type": "array",
+            "title": "Files",
+            "default": []
           }
         },
         "type": "object",

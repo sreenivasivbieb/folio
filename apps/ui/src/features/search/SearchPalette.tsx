@@ -5,7 +5,7 @@ import { TypePill } from "@/components/Badges";
 import { Icon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
 import { basename, locatorLabel } from "@/lib/format";
-import { openEvidence, selectEntity, ui } from "@/state/selection";
+import { openEvidence, selectEntity, selectSource, ui } from "@/state/selection";
 
 export function SearchPalette() {
   const [q, setQ] = useState("");
@@ -13,6 +13,7 @@ export function SearchPalette() {
   const { data, isFetching } = useSearch(q);
   const entities = data?.entities ?? [];
   const passages = data?.passages ?? [];
+  const files = data?.files ?? [];
   const close = () => ui.set({ modal: "none" });
   const pickEntity = (id: string) => {
     selectEntity(id);
@@ -37,7 +38,7 @@ export function SearchPalette() {
         <span className="kbd">Esc</span>
       </div>
       <div style={{ overflow: "auto", maxHeight: "60vh" }}>
-        {q.trim().length < 2 && <div className="empty-inline">Type at least two characters. Results come from entity names and the full text of every file.</div>}
+        {q.trim().length < 2 && <div className="empty-inline">Type at least two characters. Results come from topics, labels, file names and the full text of every file.</div>}
         {entities.length > 0 && (
           <div className="palette-group">
             <div className="label">Entities</div>
@@ -46,6 +47,20 @@ export function SearchPalette() {
                 <b className="grow ellipsis">{e.name}</b>
                 <TypePill type={e.type} />
                 {e.status !== "verified" && <span className={`badge ${e.status}`}>{e.status}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+        {files.length > 0 && (
+          <div className="palette-group">
+            <div className="label">Files</div>
+            {files.map((f) => (
+              <div key={f.source_id} className="palette-item" onClick={() => { selectSource(f.source_id); close(); }}>
+                <Icon name="file" size={14} className="muted" />
+                <div className="grow ellipsis">
+                  <b>{basename(f.path)}</b>
+                  <div className="tiny muted ellipsis">{f.via === "file name" ? f.path : `${f.via} · ${f.path}`}</div>
+                </div>
               </div>
             ))}
           </div>
@@ -68,7 +83,7 @@ export function SearchPalette() {
             ))}
           </div>
         )}
-        {q.trim().length > 1 && data && !entities.length && !passages.length && <div className="empty-inline">No matches.</div>}
+        {q.trim().length > 1 && data && !entities.length && !files.length && !passages.length && <div className="empty-inline">No matches.</div>}
       </div>
     </Modal>
   );

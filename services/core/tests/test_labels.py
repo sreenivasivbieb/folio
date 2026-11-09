@@ -148,3 +148,38 @@ def test_translated_hindi_label_shapes_are_understood(container, pdf_source):
     assert plan["ops"][1]["predicate"] == "owns"
     other = container.labels.preview("Priya is the owner of this contract", "source", [pdf_source.id])
     assert not other.parsed["unparsed"] and other.parsed["ops"][-1]["predicate"] == "owns"
+
+
+@pytest.mark.parametrize("spoken", [
+    "Tag this as finance", "Topic is finance", "This file is about finance", "label it finance",
+    "file this under finance", "category: finance",
+])
+def test_topic_labels_need_no_questions(container, pdf_source, spoken):
+    label = container.labels.preview(spoken, "source", [pdf_source.id])
+    plan = label.parsed
+    assert not plan["questions"] and not plan["unparsed"]
+    topic = next(r for r in plan["refs"].values() if r["name"] == "finance")
+    assert topic["type"] == "Topic"
+    assert container.labels.confirm(label.id).status == "committed"
+
+
+def test_topic_lists_and_reuse(container, pdf_source):
+    container.labels.confirm(container.labels.preview("this is about taxes, invoices and receipts",
+                                                      "source", [pdf_source.id]).id)
+    again = container.labels.preview("tag it as taxes", "source", [pdf_source.id]).parsed
+    assert [r["new"] for r in again["refs"].values() if r["name"] == "taxes"] == [False]
+    assert {e.name for e in repo.search_entities(container.kdb, "", ["Topic"])} == {"taxes", "invoices", "receipts"}
+
+
+def test_failed_clause_leaves_no_half_plan(container, pdf_source):
+    plan = container.labels.preview("It was signed on March 3", "source", [pdf_source.id]).parsed
+    assert plan["ops"] == [] and plan["unparsed"]
+
+
+def test_search_by_topic_finds_labelled_files(container, pdf_source):
+    container.labels.confirm(container.labels.preview("tag this as personal finance", "source",
+                                                      [pdf_source.id]).id)
+    ents = repo.search_entities(container.kdb, "finance")
+    files = container.search.files("finance", ents)
+    assert [f["source_id"] for f in files] == [pdf_source.id]
+    assert container.search.search("quantum chromodynamics") == []  # no random vector neighbours

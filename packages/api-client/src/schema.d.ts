@@ -1578,6 +1578,19 @@ export interface components {
             /** Prompt Version */
             prompt_version?: string | null;
         };
+        /** FileHit */
+        FileHit: {
+            /** Source Id */
+            source_id: string;
+            /** Path */
+            path: string;
+            /** Kind */
+            kind: string;
+            /** Status */
+            status: string;
+            /** Via */
+            via: string;
+        };
         /** FileRef */
         FileRef: {
             /** Id */
@@ -1971,6 +1984,11 @@ export interface components {
             entities: components["schemas"]["Entity"][];
             /** Passages */
             passages: components["schemas"]["Passage"][];
+            /**
+             * Files
+             * @default []
+             */
+            files: components["schemas"]["FileHit"][];
         };
         /** Source */
         Source: {
