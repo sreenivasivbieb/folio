@@ -21,7 +21,8 @@ export async function exportFile(conn: Connection, fmt: ExportFormat): Promise<b
     const { invoke } = await import("@tauri-apps/api/core");
     const path = await save({ defaultPath: fmt.file });
     if (!path) return false;
-    await invoke("save_file", { path, contents: Array.from(bytes) });
+    // Raw IPC body: the bytes go through as-is (a number array would use ~8x the memory).
+    await invoke("save_file", bytes, { headers: { "x-folio-path": encodeURIComponent(path) } });
     return true;
   }
   const url = URL.createObjectURL(new Blob([bytes]));

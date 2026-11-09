@@ -110,8 +110,20 @@ a:hover { text-decoration: underline; }
 }
 /* Tiling window managers often give Folio half a screen: narrow the side panels (same content)
    so the main view keeps usable room instead of wrapping every line. */
+.job-status { flex: 0 1 auto; min-width: 0; max-width: 420px; overflow: hidden; }
+.topbar > * { flex-shrink: 0; }
+.topbar > .job-status, .topbar > .searchbox { flex-shrink: 1; min-width: 0; }
 @media (max-width: 1280px) { .app { grid-template-columns: 240px minmax(0, 1fr) 320px; } }
 @media (max-width: 1040px) { .app { grid-template-columns: 210px minmax(0, 1fr) 270px; } .searchbox { width: min(300px, 32vw); } }
+@media (max-width: 1040px) {
+  .banner { flex-wrap: wrap; }
+  .banner .grow { flex: 1 1 calc(100% - 50px); }
+  .banner > .btn { margin-left: 46px; }
+  .list-row > .badge { display: none; } /* the row's subtitle already states the status */
+  .viewbar, .toolbar { flex-wrap: wrap; row-gap: 6px; }
+  .composer-hint { flex-wrap: wrap; row-gap: 2px; text-align: center; }
+  .job-status { max-width: 200px; }
+}
 @media (max-width: 860px) { .app { grid-template-columns: 180px minmax(0, 1fr) 240px; } .searchbox { width: min(220px, 30vw); } }
 .topbar { grid-area: top; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
 .sidebar { grid-area: left; border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }

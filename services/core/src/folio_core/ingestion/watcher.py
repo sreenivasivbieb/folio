@@ -73,7 +73,13 @@ class FolderWatcher:
             watch_dir = target if root.kind == "folder" else target.parent
             if not watch_dir.exists():
                 continue
-            self._watched[path] = self._observer.schedule(Handler(), str(watch_dir), recursive=root.kind == "folder")
+            try:
+                self._watched[path] = self._observer.schedule(Handler(), str(watch_dir), recursive=root.kind == "folder")
+            except OSError as exc:
+                # e.g. Linux inotify limit (ENOSPC). Watching is a convenience: the folder is still
+                # scanned now and rescanned on every launch, so carry on without live updates.
+                log.warning("cannot watch %s for changes (%s); it will be rescanned on next launch. "
+                            "On Linux, raise fs.inotify.max_user_watches to enable live updates.", path, exc)
 
     def _queue(self, path: Path) -> None:
         with self._lock:

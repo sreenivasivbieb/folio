@@ -57,9 +57,12 @@ class VectorIndex:
     def remove(self, conn: sqlite3.Connection, chunk_rowids: list[int]) -> None:
         if not chunk_rowids:
             return
-        marks = ",".join("?" * len(chunk_rowids))
         table, col = ("chunk_vec", "rowid") if self.db.has_vec else ("chunk_vectors", "chunk_rowid")
-        conn.execute(f"DELETE FROM {table} WHERE {col} IN ({marks})", chunk_rowids)
+        # Delete in batches: vec0 virtual tables do not support "IN (subquery)" everywhere, and one
+        # "?" per row would exceed SQLite's host-parameter limit for large documents.
+        for i in range(0, len(chunk_rowids), 500):
+            batch = chunk_rowids[i:i + 500]
+            conn.execute(f"DELETE FROM {table} WHERE {col} IN ({','.join('?' * len(batch))})", batch)
 
     def search(self, query: np.ndarray, k: int) -> list[tuple[int, float]]:
         """Return [(chunk_rowid, similarity)] best first."""

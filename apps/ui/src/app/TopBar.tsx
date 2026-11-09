@@ -10,9 +10,9 @@ function WorkIndicator() {
   if (!running.length && !queued) return null;
   const top = running[0];
   return (
-    <button type="button" className="btn ghost sm" onClick={() => ui.set({ leftTab: "activity" })} title="Background work">
+    <button type="button" className="btn ghost sm job-status" onClick={() => ui.set({ leftTab: "activity" })} title="Background work">
       <Icon name="loader" spin />
-      <span className="small">
+      <span className="small ellipsis">
         {top ? `${top.kind === "scan_root" ? "Scanning" : top.kind === "extract_source" ? "Extracting" : top.kind === "download_speech_model" ? "Downloading" : "Indexing"}${top.message ? ` · ${top.message}` : ""}` : "Queued"}
         {queued ? ` (+${queued})` : ""}
       </span>

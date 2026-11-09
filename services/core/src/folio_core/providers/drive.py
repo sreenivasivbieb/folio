@@ -19,6 +19,8 @@ from .secrets import SecretStore
 AUTH = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN = "https://oauth2.googleapis.com/token"
 FILES = "https://www.googleapis.com/drive/v3/files"
+UPLOAD = "https://www.googleapis.com/upload/drive/v3/files"
+MULTIPART_LIMIT = 4 * 1024 * 1024  # Drive rejects multipart bodies over 5 MB; keep a margin
 SCOPE = "https://www.googleapis.com/auth/drive.file"
 
 
@@ -113,13 +115,25 @@ class DriveService:
     def backup(self, data: dict) -> dict:
         name = "folio-backup-" + datetime.now(UTC).strftime("%Y-%m-%d-%H%M%S") + ".json"
         metadata = json.dumps({"name": name, "mimeType": "application/json", "appProperties": {"application": "folio"}})
+        body = json.dumps(data, ensure_ascii=False).encode()
+        fields = {"fields": "id,name,size,modifiedTime"}
+        if len(body) > MULTIPART_LIMIT:
+            # Drive's multipart upload is capped at 5 MB; larger backups use a resumable session.
+            session = self._request("POST", UPLOAD, params={"uploadType": "resumable", **fields},
+                headers={**self._headers(), "Content-Type": "application/json; charset=UTF-8",
+                         "X-Upload-Content-Type": "application/json", "X-Upload-Content-Length": str(len(body))},
+                content=metadata.encode())
+            location = session.headers.get("location")
+            if not location:
+                raise Unavailable("Google Drive did not start the upload; local data is unchanged")
+            return self._request("PUT", location, headers={**self._headers(), "Content-Type": "application/json"},
+                                 content=body).json()
         boundary = "folio_" + secrets.token_hex(16)
         content = (f"--{boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n{metadata}\r\n"
-                   f"--{boundary}\r\nContent-Type: application/json\r\n\r\n" + json.dumps(data, ensure_ascii=False)
-                   + f"\r\n--{boundary}--\r\n").encode()
-        return self._request("POST", "https://www.googleapis.com/upload/drive/v3/files",
+                   f"--{boundary}\r\nContent-Type: application/json\r\n\r\n").encode() + body + f"\r\n--{boundary}--\r\n".encode()
+        return self._request("POST", UPLOAD,
             headers={**self._headers(), "Content-Type": f"multipart/related; boundary={boundary}"},
-            params={"uploadType": "multipart", "fields": "id,name,size,modifiedTime"}, content=content).json()
+            params={"uploadType": "multipart", **fields}, content=content).json()
 
     def download(self, file_id: str) -> dict:
         import re

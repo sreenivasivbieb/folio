@@ -21,6 +21,8 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
+from .maintenance import compact, enable_incremental_on_new
+
 log = logging.getLogger(__name__)
 
 
@@ -63,6 +65,7 @@ class IndexDB:
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path, check_same_thread=False, isolation_level=None, timeout=30)
         conn.row_factory = sqlite3.Row
+        enable_incremental_on_new(conn)  # must precede WAL: switching to WAL writes the file header
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
         conn.execute("PRAGMA busy_timeout=30000")
@@ -107,6 +110,9 @@ class IndexDB:
             log.info("applying index migration %s", f.name)
             with self._write_lock:
                 self._writer.executescript(f"BEGIN;\n{f.read_text()}\nPRAGMA user_version={version};\nCOMMIT;")
+
+    def compact(self) -> None:
+        compact(self._writer, self._write_lock, self.path.name)
 
     def reset(self) -> None:
         """Empty every table (same effect as deleting index.db, but safe while open on Windows)."""

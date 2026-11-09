@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import errno
 import hashlib
+import json
 import logging
 import os
 from collections.abc import Callable, Iterator
@@ -423,11 +424,13 @@ class IngestionService:
         if not rowids:
             return {}
         conn = self.index.reader()
-        marks = ",".join("?" * len(rowids))
+        # One JSON parameter, not one "?" per chunk: a long transcript can have more chunks than
+        # SQLite's host-parameter limit (999 on older builds).
+        ids = json.dumps(rowids)
         if self.index.has_vec:
-            rows = conn.execute(f"SELECT rowid, embedding FROM chunk_vec WHERE rowid IN ({marks})", rowids)
+            rows = conn.execute("SELECT rowid, embedding FROM chunk_vec WHERE rowid IN (SELECT value FROM json_each(?))", (ids,))
         else:
-            rows = conn.execute(f"SELECT chunk_rowid, vec FROM chunk_vectors WHERE chunk_rowid IN ({marks})", rowids)
+            rows = conn.execute("SELECT chunk_rowid, vec FROM chunk_vectors WHERE chunk_rowid IN (SELECT value FROM json_each(?))", (ids,))
         by_rowid = {r[0]: np.frombuffer(r[1], dtype=np.float32).copy() for r in rows}
         return {h: by_rowid[rid] for rid, h in zip(rowids, hashes, strict=True) if rid in by_rowid}
 

@@ -20,6 +20,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from ..domain.errors import Conflict
+from .maintenance import compact, enable_incremental_on_new
 
 
 class WriteConflict(Conflict):
@@ -321,6 +322,7 @@ class KnowledgeDB:
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path, isolation_level=None, check_same_thread=False, timeout=30)
+        enable_incremental_on_new(conn)  # must precede WAL: switching to WAL writes the file header
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=FULL")
         conn.create_function("regexp", 2, lambda pattern, value: bool(value is not None and re.search(pattern, str(value))))
@@ -366,6 +368,9 @@ class KnowledgeDB:
         with self.transaction():
             self["counters"].update_one({"_id": counter}, {"$inc": {"seq": 1}}, upsert=True)
             return self["counters"].find_one({"_id": counter})["seq"]
+
+    def compact(self) -> None:
+        compact(self._writer, self._write_lock, self.path.name)
 
     def drop(self) -> None:
         with self.transaction():

@@ -82,3 +82,101 @@ def test_deleted_files_are_marked_missing_despite_an_unreadable_folder(container
         assert by_name["secret.txt"] != "missing"  # could not look there: not assumed deleted
     finally:
         (root / "locked").chmod(0o700)
+
+
+def test_large_documents_do_not_hit_the_sql_parameter_limit(container):
+    import sqlite3
+
+    conn = container.index.reader()
+    limit = conn.getlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER)
+    conn.setlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, 999)  # an older SQLite build
+    try:
+        many = list(range(1, 5000))
+        assert container.ingestion._existing_vectors(many, [str(i) for i in many]) == {}
+    finally:
+        conn.setlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, limit)
+    with container.index.write() as w:
+        w.setlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, 999)
+        container.vectors.remove(w, list(range(1, 5000)))  # batched: no "too many SQL variables"
+
+
+def test_new_databases_reclaim_space_incrementally(container):
+    for conn in (container.kdb._writer, container.index._writer):
+        assert conn.execute("PRAGMA auto_vacuum").fetchone()[0] == 2
+    container.kdb.compact()
+    container.index.compact()
+
+
+def test_old_bloated_database_is_compacted_once(tmp_path):
+    import sqlite3
+    import threading
+
+    from folio_core.store.maintenance import compact
+
+    path = tmp_path / "old.db"
+    c = sqlite3.connect(path, isolation_level=None)
+    c.execute("create table t(x)")
+    c.executemany("insert into t values (?)", [("x" * 2000,)] * 6000)
+    c.execute("delete from t")
+    before = path.stat().st_size
+    compact(c, threading.RLock(), "old.db")
+    assert c.execute("PRAGMA auto_vacuum").fetchone()[0] == 2
+    assert path.stat().st_size < before / 4
+
+
+def test_microphone_failure_never_leaves_recording_stuck(tmp_path):
+    from folio_core.speech.recorder import MicRecorder
+
+    class Broken:
+        def stop(self):
+            raise OSError("device unplugged")
+
+        def close(self):
+            raise OSError("device gone")
+
+    rec = MicRecorder()
+    rec._stream, rec._frames, rec._rate = Broken(), [b"\x00\x00" * 1600], 16000
+    rec.stop(tmp_path / "a.wav")
+    assert not rec.recording
+
+
+def test_watch_limit_does_not_break_adding_a_folder(container, files, monkeypatch):
+    import errno
+
+    w = container.watcher
+    w.start()
+    try:
+        def full(*a, **k):
+            raise OSError(errno.ENOSPC, "inotify watch limit reached")
+
+        monkeypatch.setattr(w._observer, "schedule", full)
+        container.ingestion.add_root(str(files), watch=True)
+        w.sync()  # logs a warning instead of raising
+    finally:
+        w.stop()
+
+
+def test_large_drive_backup_uses_a_resumable_upload(tmp_path):
+    import httpx
+
+    from folio_core.providers.drive import MULTIPART_LIMIT, DriveService
+    from folio_core.providers.secrets import SecretStore
+
+    seen = []
+
+    def google(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.url.params.get("uploadType"), len(request.content)))
+        if request.url.path == "/token":
+            return httpx.Response(200, json={"access_token": "a", "expires_in": 3600})
+        if request.method == "POST":
+            return httpx.Response(200, headers={"Location": "https://www.googleapis.com/upload/session/1"})
+        return httpx.Response(200, json={"id": "big"})
+
+    store = SecretStore(tmp_path / "secrets.json")
+    for k, v in {"drive.client_id": "c", "drive.client_secret": "s", "drive.refresh_token": "r"}.items():
+        store.set(k, v)
+    drive = DriveService(store)
+    drive.client = httpx.Client(transport=httpx.MockTransport(google))
+    assert drive.backup({"blob": "x" * (MULTIPART_LIMIT + 10)})["id"] == "big"
+    assert [s[:2] for s in seen[1:]] == [("POST", "resumable"), ("PUT", None)]
+    assert seen[-1][2] > MULTIPART_LIMIT

@@ -80,6 +80,9 @@ export function GraphView() {
   useEffect(() => {
     if (!graph || !container.current) return;
     const renderer = new Sigma(graph, container.current, {
+      // The view can be momentarily 0px tall (narrow tiled windows, layout changes). Without this
+      // Sigma throws, and the error used to unmount the entire app (blank window).
+      allowInvalidContainer: true,
       // Edge labels only while the graph is small enough to read them; hover shows the rest.
       renderEdgeLabels: graph.size <= 60,
       labelDensity: 0.6,

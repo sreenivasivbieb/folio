@@ -18,6 +18,7 @@ import { VoiceBar } from "@/features/voice/VoiceBar";
 import { ScanModal } from "@/features/sources/ScanModal";
 import { openSettings, ui, type ViewName } from "@/state/selection";
 import { toasts } from "@/state/toast";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { GraphView } from "@/views/graph/GraphView";
 import { SwimlaneView } from "@/views/swimlane/SwimlaneView";
 import { TableView } from "@/views/table/TableView";
@@ -104,10 +105,12 @@ function MainArea() {
       ) : (
         <>
           <Onboarding />
-          {view === "graph" && <GraphView />}
-          {view === "swimlane" && <SwimlaneView />}
-          {view === "timeline" && <TimelineView />}
-          {view === "table" && <TableView />}
+          <ErrorBoundary resetKey={view}>
+            {view === "graph" && <GraphView />}
+            {view === "swimlane" && <SwimlaneView />}
+            {view === "timeline" && <TimelineView />}
+            {view === "table" && <TableView />}
+          </ErrorBoundary>
         </>
       )}
     </main>

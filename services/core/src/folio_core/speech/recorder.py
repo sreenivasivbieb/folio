@@ -6,6 +6,7 @@ works the same on every OS. Audio is kept next to the database as the label's ev
 
 from __future__ import annotations
 
+import logging
 import sys
 import threading
 import time
@@ -13,6 +14,8 @@ import wave
 from pathlib import Path
 
 from ..domain.errors import Conflict, Unavailable
+
+log = logging.getLogger(__name__)
 
 SAMPLE_RATE = 16_000
 MAX_SECONDS = 120
@@ -78,20 +81,31 @@ class MicRecorder:
             # 16 kHz. The decoder resamples for Whisper.
             device = sd.query_devices(kind="input")
             self._rate = int(device.get("default_samplerate") or SAMPLE_RATE)
-            self._stream = sd.RawInputStream(samplerate=self._rate, channels=1, dtype="int16",
-                                             callback=callback)
+            stream = sd.RawInputStream(samplerate=self._rate, channels=1, dtype="int16", callback=callback)
             self._started = time.monotonic()
-            self._stream.start()
+            try:
+                stream.start()
+            except Exception:
+                stream.close()  # never leave a half-open stream marked as "recording"
+                raise
+            self._stream = stream
 
     def stop(self, dest: Path) -> float:
         """Stop and write a mono 16-bit WAV at the device rate. Returns the duration in seconds."""
         with self._lock:
             if self._stream is None:
                 raise Conflict("not recording")
-            self._stream.stop()
-            self._stream.close()
-            self._stream = None
+            stream, self._stream = self._stream, None  # released even if the device misbehaves
             frames, self._frames = self._frames, []
+            try:
+                stream.stop()
+            except Exception as exc:  # unplugged mic, driver over/underrun
+                log.warning("microphone stop failed: %s", exc)
+            finally:
+                try:
+                    stream.close()
+                except Exception as exc:
+                    log.warning("microphone close failed: %s", exc)
         dest.parent.mkdir(parents=True, exist_ok=True)
         data = b"".join(frames)
         with wave.open(str(dest), "wb") as w:

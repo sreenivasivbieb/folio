@@ -72,6 +72,8 @@ class Container:
         return self.extraction.extractor()
 
     def start(self, background_scan: bool = True) -> None:
+        for db in (self.kdb, self.index):  # before any worker writes: reclaim disk space
+            db.compact()
         self.workers.start()
         if self.settings.watch:
             self.watcher.start()

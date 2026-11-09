@@ -24,10 +24,43 @@ async fn core_connection(sidecar: tauri::State<'_, Sidecar>) -> Result<Connectio
 }
 
 /// Write an export the user chose a location for (path comes from the native save dialog).
+/// The bytes arrive as a raw IPC body. Sending them as a JSON number array (the default for a
+/// `Vec<u8>` argument) cost ~8 bytes of heap per byte and froze the window on large exports.
 #[tauri::command]
-fn save_file(path: String, contents: Vec<u8>) -> Result<(), String> {
+fn save_file(request: tauri::ipc::Request<'_>) -> Result<(), String> {
+    let tauri::ipc::InvokeBody::Raw(contents) = request.body() else {
+        return Err("export data must be sent as raw bytes".into());
+    };
+    let path = request
+        .headers()
+        .get("x-folio-path")
+        .and_then(|v| v.to_str().ok())
+        .map(percent_decode)
+        .ok_or("missing export location")??;
+    write_export(&path, contents)
+}
+
+/// `encodeURIComponent` on the UI side keeps non-ASCII paths valid as an HTTP-style header.
+fn percent_decode(s: &str) -> Result<String, String> {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).map_err(|_| "invalid export location")?;
+            out.push(u8::from_str_radix(hex, 16).map_err(|_| "invalid export location")?);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).map_err(|_| "invalid export location".into())
+}
+
+fn write_export(path: &str, contents: &[u8]) -> Result<(), String> {
     use std::io::Write;
-    let target = std::path::Path::new(&path);
+    let target = std::path::Path::new(path);
     let parent = target.parent().ok_or("invalid export location")?;
     let temp = parent.join(format!(".folio-export-{}.tmp", uuid::Uuid::new_v4()));
     let result = (|| -> std::io::Result<()> {
@@ -42,7 +75,7 @@ fn save_file(path: String, contents: Vec<u8>) -> Result<(), String> {
         if let Ok(existing) = std::fs::metadata(target) {
             file.set_permissions(existing.permissions())?;
         }
-        file.write_all(&contents)?;
+        file.write_all(contents)?;
         file.sync_all()?;
         std::fs::rename(&temp, target)
     })();
@@ -60,10 +93,10 @@ mod tests {
         let folder = std::env::temp_dir().join(format!("folio-export-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir(&folder).unwrap();
         let target = folder.join("backup.json");
-        save_file(target.to_string_lossy().into_owned(), b"first".to_vec()).unwrap();
+        write_export(&target.to_string_lossy(), b"first").unwrap();
         assert_eq!(std::fs::metadata(&target).unwrap().permissions().mode() & 0o077, 0);
         std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o640)).unwrap();
-        save_file(target.to_string_lossy().into_owned(), b"second".to_vec()).unwrap();
+        write_export(&target.to_string_lossy(), b"second").unwrap();
         assert_eq!(std::fs::read(&target).unwrap(), b"second");
         assert_eq!(std::fs::metadata(&target).unwrap().permissions().mode() & 0o777, 0o640);
         std::fs::remove_dir_all(folder).unwrap();
@@ -75,10 +108,17 @@ mod tests {
         std::fs::create_dir(&folder).unwrap();
         let target = folder.join("directory");
         std::fs::create_dir(&target).unwrap();
-        assert!(save_file(target.to_string_lossy().into_owned(), b"fixture".to_vec()).is_err());
+        assert!(write_export(&target.to_string_lossy(), b"fixture").is_err());
         assert!(target.is_dir());
         assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 1);
         std::fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn export_paths_survive_percent_encoding() {
+        assert_eq!(percent_decode("/home/v/My%20Files/b%C3%A4ckup.json").unwrap(), "/home/v/My Files/bäckup.json");
+        assert_eq!(percent_decode("C%3A%5CUsers%5Cme%5Cfolio.json").unwrap(), "C:\\Users\\me\\folio.json");
+        assert!(percent_decode("%zz").is_err());
     }
 
     #[test]
@@ -93,21 +133,25 @@ fn open_google_auth(url: String) -> Result<(), String> {
     if !url.starts_with("https://accounts.google.com/o/oauth2/v2/auth?") {
         return Err("only Google authorization URLs are allowed".into());
     }
-    #[cfg(target_os = "linux")]
-    let mut command = std::process::Command::new("xdg-open");
-    #[cfg(target_os = "macos")]
-    let mut command = std::process::Command::new("open");
-    #[cfg(target_os = "windows")]
-    let mut command = { let mut c = std::process::Command::new("rundll32.exe"); c.arg("url.dll,FileProtocolHandler"); c };
-    command.arg(url).spawn().map(|_| ()).map_err(|e| format!("cannot open system browser: {e}"))
+    // The opener uses ShellExecuteW on Windows (rundll32's legacy argument parsing could mangle
+    // long OAuth URLs), `open` on macOS and xdg-open on Linux.
+    tauri_plugin_opener::open_url(&url, None::<&str>).map_err(|e| format!("cannot open system browser: {e}"))
 }
 
 pub fn run() {
     let push_to_talk = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::Space);
     let sidecar = Sidecar::default();
-    sidecar.start();
 
     let app = tauri::Builder::default()
+        // First: a second launch hands over to the running window and exits before it starts a
+        // core of its own (which could not lock the data folder and showed an error screen).
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -122,6 +166,7 @@ pub fn run() {
         .manage(sidecar)
         .setup(move |app| {
             use tauri_plugin_global_shortcut::GlobalShortcutExt;
+            app.state::<Sidecar>().start(); // only the single surviving instance runs a core
             if let Err(e) = app.global_shortcut().register(push_to_talk) {
                 log::warn!("global push-to-talk hotkey unavailable ({e}); use the in-app key or `folio-core voice toggle`");
             }

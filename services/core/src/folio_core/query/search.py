@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
@@ -51,9 +52,9 @@ class HybridSearch:
         if not ranked:
             return []
         rowids = sorted(ranked, key=lambda r: -ranked[r])
-        marks = ",".join("?" * len(rowids))
         rows = conn.execute(
-            f"SELECT rowid AS rid, id, source_id, text, locator FROM chunks WHERE rowid IN ({marks})", rowids,
+            "SELECT rowid AS rid, id, source_id, text, locator FROM chunks "
+            "WHERE rowid IN (SELECT value FROM json_each(?))", (json.dumps(rowids),),
         ).fetchall()
         by_id = {r["rid"]: r for r in rows}
         sources = repo.get_sources(self.kdb, [r["source_id"] for r in rows])
