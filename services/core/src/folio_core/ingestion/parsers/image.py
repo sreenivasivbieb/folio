@@ -18,13 +18,18 @@ class ImageParser:
     sandboxed = True
 
     def parse(self, path: Path, ctx: ParseContext) -> list[ParsedUnit]:
-        from PIL import Image
+        from PIL import Image, UnidentifiedImageError
 
-        with Image.open(path) as img:
-            width, height = img.size
-            exif_date = None
-            with contextlib.suppress(Exception):
-                exif_date = img.getexif().get(306)  # DateTime
+        try:
+            with Image.open(path) as img:
+                width, height = img.size
+                exif_date = None
+                with contextlib.suppress(Exception):
+                    exif_date = img.getexif().get(306)  # DateTime
+        except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
+            # Scientific/GeoTIFF rasters, truncated or exotic files: index the name, don't fail.
+            return [ParsedUnit(f"Image {path.name} (format not readable for preview or OCR)",
+                               {"kind": "region", "rect": [0, 0, 0, 0]})]
         units: list[ParsedUnit] = []
         if tesseract_available():
             for line in group_lines(ocr_lines(path)):

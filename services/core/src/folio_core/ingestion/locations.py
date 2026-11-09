@@ -17,8 +17,8 @@ DEFAULT_EXCLUSIONS = [".git", ".hg", ".svn", "node_modules", ".venv", "venv", "_
 
 
 def _windows_system_dirs() -> list[Path]:
-    root = Path(os.environ.get("SystemDrive", "C:") + "\\")
-    dirs = [Path(os.environ.get("SystemRoot", root / "Windows")), root / "$Recycle.Bin",
+    root = Path(os.environ.get("SYSTEMDRIVE", "C:") + "\\")
+    dirs = [Path(os.environ.get("SYSTEMROOT", root / "Windows")), root / "$Recycle.Bin",
             root / "System Volume Information", root / "Recovery", root / "ProgramData" / "Microsoft",
             Path(os.environ.get("TEMP", root / "Windows" / "Temp"))]
     if local := os.environ.get("LOCALAPPDATA"):

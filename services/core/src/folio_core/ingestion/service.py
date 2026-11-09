@@ -23,7 +23,7 @@ from pathlib import Path
 import numpy as np
 
 from ..config import Settings
-from ..domain.errors import InvalidInput, NotFound
+from ..domain.errors import InvalidInput, NotFound, Unavailable
 from ..domain.ids import new_id
 from ..domain.models import ClaimStatus, Root, Source, SourceKind, SourceStatus
 from ..jobs import Job, JobQueue
@@ -324,14 +324,29 @@ class IngestionService:
             self.queue.progress(job.id, 0.96, f"{len(drafts)} chunks; embedding")
             if not self._commit_index(src, drafts, st, digest):
                 return "cancelled: source changed or is no longer tracked"
-        except Exception as exc:
+        except Unavailable as exc:
+            if src.kind.value not in MEDIA:
+                self._failed(src.id, exc)
+                raise
+            # Audio/video waiting for the speech model is not an error: it stays pending and
+            # requeue_media() picks it up as soon as the model is downloaded.
             with self.kdb._write_lock:
                 current = repo.get_source(self.kdb, src.id)
                 if current and current.status == SourceStatus.INDEXING:
-                    repo.set_source_status(self.kdb, src.id, SourceStatus.FAILED, error=str(exc)[:1000])
+                    repo.set_source_status(self.kdb, src.id, SourceStatus.PENDING, error=str(exc)[:1000])
             self._changed(src.id)
+            return "waiting for the speech model (Settings → Voice)"
+        except Exception as exc:
+            self._failed(src.id, exc)
             raise
         return f"indexed {len(drafts)} chunks"
+
+    def _failed(self, source_id: str, exc: Exception) -> None:
+        with self.kdb._write_lock:
+            current = repo.get_source(self.kdb, source_id)
+            if current and current.status == SourceStatus.INDEXING:
+                repo.set_source_status(self.kdb, source_id, SourceStatus.FAILED, error=str(exc)[:1000])
+        self._changed(source_id)
 
     def _commit_index(self, src: Source, drafts, st, digest: str) -> bool:  # type: ignore[no-untyped-def]
         # Parsing stays outside the lock. Forget/remove and this short commit cannot interleave.

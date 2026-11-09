@@ -23,7 +23,7 @@ export function ScanModal() {
   const scan = useAction(async () => {
     const selected = [...new Set([...paths, ...custom.split("\n").map((s) => s.trim()).filter(Boolean)])];
     for (const path of selected) {
-      unwrap(await client.POST("/api/roots", { body: { path, watch: watch && path !== "/", include_hidden: hidden,
+      unwrap(await client.POST("/api/roots", { body: { path, watch: watch && !/^(\/|[A-Za-z]:\\?)$/.test(path), include_hidden: hidden,
         exclude: exclude.split("\n").map((s) => s.trim()).filter(Boolean) } }));
     }
     ui.set({ modal: "none", leftTab: "activity" });
@@ -41,7 +41,7 @@ export function ScanModal() {
         <span className="grow"><b>{location.label}</b><span className="small muted" style={{ display: "block", overflowWrap: "anywhere" }}>{location.path}</span></span>
       </label>)}
       <label className="field">Additional folders or drives (one absolute path per line)
-        <textarea className="input" rows={2} value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="/mnt/my-drive" />
+        <textarea className="input" rows={2} value={custom} onChange={(e) => setCustom(e.target.value)} placeholder={navigator.userAgent.includes("Windows") ? "D:\\Documents" : "/mnt/my-drive"} />
       </label>
       <label className="row"><input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} /> Include hidden files and folders</label>
       <label className="row"><input type="checkbox" checked={watch} onChange={(e) => setWatch(e.target.checked)} /> Watch selected folders for changes (except the entire filesystem)</label>

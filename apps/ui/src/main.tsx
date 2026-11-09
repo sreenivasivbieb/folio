@@ -66,7 +66,7 @@ function Boot() {
         {failed && <div className="stack" style={{ maxWidth: 600, textAlign: "center", gap: 12 }}>
           <p role="alert">{error}</p>
           <p>{inTauri
-            ? "Check ~/.local/share/folio/logs/core.log for the cause. Folio stores its data on this device."
+            ? (navigator.userAgent.includes("Windows") ? "Check %APPDATA%\\folio\\logs\\core.log" : "Check ~/.local/share/folio/logs/core.log") + " for the cause. Folio stores its data on this device."
             : "Run npm run dev from the Folio project folder to start the local backend and interface together."}</p>
           <p className="muted small">Folio retries automatically. Your files and knowledge are kept.</p>
           <button type="button" className="btn primary" onClick={() => { setError(null); setRetry((n) => n + 1); }}>Retry now</button>
