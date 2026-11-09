@@ -8,6 +8,7 @@ The label (transcript + audio) is the evidence of every claim it creates.
 from __future__ import annotations
 
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,7 @@ from .label_parser import LabelContext, RuleLabelParser, answer_question
 from .llm_label_parser import LLMLabelParser
 from .recorder import MicRecorder
 
+STATUS_TTL_S = 15.0
 BEAM_SIZE = 3  # short commands: near-greedy decoding keeps end-of-speech -> preview fast
 
 
@@ -47,24 +49,45 @@ class LabelService:
         self._target: tuple[str, list[str]] = ("none", [])
         self.focus: tuple[str, list[str]] = ("none", [])  # what the UI has selected right now
         self._lock = threading.Lock()
+        self._probe: tuple[float, tuple[bool, str, bool, bool]] | None = None
 
     # --- capture --------------------------------------------------------------------------
 
+    def refresh_status(self) -> None:
+        """Forget the cached device/model probe (after a download, a settings change, or a start)."""
+        self._probe = None
+
+    def _probed(self) -> tuple[bool, str, bool, bool]:
+        # The status endpoint is polled by the UI. Querying audio devices and looking the speech
+        # model up can take seconds (more under indexing load), which made /api/status slow
+        # enough for the UI's startup check to time out. Cache briefly.
+        now = time.monotonic()
+        if self._probe is None or now - self._probe[0] > STATUS_TTL_S:
+            mic_ok, mic_reason = MicRecorder.available()
+            installed = self.transcriber.installed()
+            local_check = getattr(self.transcriber, "local_installed", None)
+            local = bool(local_check()) if callable(local_check) else installed
+            self._probe = (now, (mic_ok, mic_reason, installed, local))
+        return self._probe[1]
+
     def status(self) -> dict[str, Any]:
-        mic_ok, mic_reason = MicRecorder.available()
-        installed = self.transcriber.installed()
+        mic_ok, mic_reason, installed, local = self._probed()
         return {
             "recording": self.recorder.recording,
             "microphone": mic_ok, "microphone_detail": mic_reason,
             "speech_model": self.transcriber.model_id,
             "speech_available": installed,
-            "speech_downloadable": hasattr(self.transcriber, "download") and not installed,
+            "speech_engine": "none" if not installed else ("local" if local else "cloud"),
+            # Offline speech can still be downloaded when the cloud provider handles speech.
+            "speech_downloadable": hasattr(self.transcriber, "download") and not local,
             "speech_size_mb": int(getattr(self.transcriber, "size_mb", 0)),
         }
 
     def start(self, target_kind: str, target_ids: list[str]) -> None:
+        self.refresh_status()
         if not self.transcriber.installed():
-            raise Unavailable("the speech model is not downloaded yet — download it in Settings, or type the label")
+            raise Unavailable("voice is not set up — connect Groq or OpenAI in Settings → AI model, "
+                              "download the offline speech model in Settings → Voice, or type the label")
         if target_kind == "none":  # e.g. a desktop hotkey: label whatever the UI has selected
             target_kind, target_ids = self.focus
         with self._lock:

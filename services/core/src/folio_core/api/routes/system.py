@@ -107,6 +107,10 @@ def put_llm(body: LLMSettingsBody, c: C) -> LLMSettingsView:
             "provider": body.provider, "base_url": body.base_url.rstrip("/"), "model": body.model.strip()}})
         if cloud:
             tx.upsert("settings", {"id": "cloud.enabled", "value": True})
+    c.labels.refresh_status()
+    if c.providers.stt.installed():  # e.g. Groq/OpenAI can now transcribe waiting audio/video
+        c.ingestion.requeue_media()
+        c.workers.notify()
     return get_llm(c)
 
 

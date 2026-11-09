@@ -183,13 +183,21 @@ function VoiceTab() {
     <div className="stack" style={{ gap: 14 }}>
       <div>
         <h2>Voice</h2>
-        <p className="lead small text-2" style={{ margin: 0 }}>Speech is recognised on this computer with Whisper. Audio never leaves your machine.</p>
+        <p className="lead small text-2" style={{ margin: 0 }}>
+          {voice?.speech_engine === "cloud"
+            ? "Speech is recognised by your connected AI provider's Whisper. Download the offline model to keep audio on this computer."
+            : "Speech is recognised on this computer with Whisper. Audio never leaves your machine."}
+        </p>
       </div>
       <div className={`callout ${voice?.speech_available ? "ok" : "warn"}`}>
         <Icon name={voice?.speech_available ? "check" : "download"} />
         <div className="grow">
-          <b>Speech model {voice?.speech_available ? "ready" : "not downloaded"}</b>
-          <div className="small text-2"><span className="mono">{voice?.speech_model}</span> · needed for voice labels and for indexing audio/video</div>
+          <b>{voice?.speech_engine === "cloud" ? "Voice ready — via your AI provider" : voice?.speech_available ? "Offline speech model ready" : "Voice not set up"}</b>
+          <div className="small text-2">
+            {voice?.speech_available
+              ? <><span className="mono">{voice?.speech_model}</span> · voice labels and audio/video indexing</>
+              : "Connect Groq or OpenAI in AI model (instant, uses your key), or download the offline model."}
+          </div>
           {download && (
             <div style={{ marginTop: 8 }}>
               <div className="progress"><div style={{ width: `${Math.round(download.progress * 100)}%` }} /></div>
@@ -200,7 +208,7 @@ function VoiceTab() {
         </div>
         {voice?.speech_downloadable && !download && (
           <button type="button" className="btn primary sm" onClick={() => actions.downloadSpeech.mutate(undefined)}>
-            <Icon name="download" /> Download ({voice.speech_size_mb} MB)
+            <Icon name="download" /> {voice.speech_engine === "cloud" ? "Use offline instead" : "Download"} ({voice.speech_size_mb} MB)
           </button>
         )}
       </div>
@@ -210,7 +218,7 @@ function VoiceTab() {
       </div>
       <div className="callout">
         <Icon name="info" />
-        <span>Speak in any language — Hindi, Hinglish, English. Labels are translated to English on this computer, then
+        <span>Speak in any language — Hindi, Hinglish, English. Labels are translated to English, then
           shown for you to check; you can edit the text if a name was misheard.</span>
       </div>
       <div className="field">

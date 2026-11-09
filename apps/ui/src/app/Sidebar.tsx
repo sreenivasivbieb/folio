@@ -39,7 +39,9 @@ function StatusCards() {
         <div className="grow">
           <div className="title">Voice {voice.speech_available ? "ready" : "not set up"}</div>
           <div className="sub ellipsis">
-            {voice.speech_available ? (voice.microphone ? "Hold Ctrl+Space · any language" : "No microphone found") : voice.speech_downloadable ? `Download speech model (${voice.speech_size_mb} MB)` : "Type labels instead"}
+            {voice.speech_available
+              ? (voice.microphone ? `Hold Ctrl+Space · ${voice.speech_engine === "cloud" ? "via your AI provider" : "offline"}` : "No microphone found")
+              : voice.speech_downloadable ? "Connect Groq/OpenAI, or download the model" : "Type labels instead"}
           </div>
         </div>
         <Icon name="chevronRight" size={14} className="muted" />

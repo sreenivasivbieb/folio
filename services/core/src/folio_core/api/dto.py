@@ -308,6 +308,7 @@ class VoiceStatus(BaseModel):
     speech_available: bool
     speech_downloadable: bool
     speech_size_mb: int
+    speech_engine: str = "none"  # local | cloud | none
 
 
 class LLMStatus(BaseModel):

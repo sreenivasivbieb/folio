@@ -6771,6 +6771,11 @@
           "speech_size_mb": {
             "type": "integer",
             "title": "Speech Size Mb"
+          },
+          "speech_engine": {
+            "type": "string",
+            "title": "Speech Engine",
+            "default": "none"
           }
         },
         "type": "object",

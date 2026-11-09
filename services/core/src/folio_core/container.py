@@ -82,6 +82,8 @@ class Container:
             self.watcher.start()
         if background_scan:  # catch changes made while the app was closed
             threading.Thread(target=self.ingestion.rescan_all, name="folio-rescan", daemon=True).start()
+        # Probe microphone + speech off the request path, so the UI's first status call is fast.
+        threading.Thread(target=self.labels.status, name="folio-voice-probe", daemon=True).start()
         warm = getattr(self.providers.stt, "warm", None)
         if warm:  # load the speech model now, so the first push-to-talk is fast
             threading.Thread(target=warm, name="folio-stt-warm", daemon=True).start()
@@ -108,6 +110,11 @@ def build_container(settings: Settings, providers: Providers | None = None,
     providers = providers or build_providers(settings)
     secrets = SecretStore(settings.secrets_file)
     llm = providers.llm if providers.llm is not None else ConfiguredLLM(kdb, secrets)
+    if providers.llm is None:  # real app: speech can also go through the connected provider
+        from .providers.stt.cloud_stt import CloudWhisper, HybridTranscriber
+
+        providers = Providers(embedder=providers.embedder, stt=HybridTranscriber(providers.stt, CloudWhisper(llm)),
+                              llm=providers.llm)
 
     knowledge = KnowledgeService(kdb, ledger, index)
     knowledge.ensure_schema()
@@ -143,6 +150,7 @@ def build_container(settings: Settings, providers: Providers | None = None,
         queue.progress(job.id, 0.99, "loading the model")
         stt.warm()
         n = ingestion.requeue_media()
+        labels.refresh_status()
         bus.publish({"type": "voice"})
         return f"{stt.model_id} ready; {n} audio/video file(s) queued"
 

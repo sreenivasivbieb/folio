@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -17,15 +18,24 @@ class OcrLine:
     box: tuple[float, float, float, float]  # x0, y0, x1, y1 in image pixels (top-left origin)
 
 
+log = logging.getLogger(__name__)
+
+
 def tesseract_available() -> bool:
     return shutil.which("tesseract") is not None
 
 
 def ocr_lines(image_path: Path, lang: str = "eng") -> list[OcrLine]:
-    out = subprocess.run(
-        ["tesseract", str(image_path), "stdout", "-l", lang, "tsv"],
-        capture_output=True, text=True, timeout=300, check=True,
-    ).stdout
+    try:
+        out = subprocess.run(
+            ["tesseract", str(image_path), "stdout", "-l", lang, "tsv"],
+            capture_output=True, text=True, timeout=300, check=True,
+        ).stdout
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
+        # OCR is optional: an image Tesseract cannot read (format, missing language data,
+        # timeout) is still indexed by its name and details instead of failing the whole file.
+        log.warning("OCR skipped for %s: %s", image_path.name, exc)
+        return []
     lines: dict[tuple[int, int, int], list[tuple[str, float, float, float, float]]] = {}
     for row in csv.DictReader(io.StringIO(out), delimiter="\t", quoting=csv.QUOTE_NONE):
         text = (row.get("text") or "").strip()

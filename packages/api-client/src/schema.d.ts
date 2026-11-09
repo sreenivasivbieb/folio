@@ -2391,6 +2391,11 @@ export interface components {
             speech_downloadable: boolean;
             /** Speech Size Mb */
             speech_size_mb: number;
+            /**
+             * Speech Engine
+             * @default none
+             */
+            speech_engine: string;
         };
         /** VoiceToggle */
         VoiceToggle: {
