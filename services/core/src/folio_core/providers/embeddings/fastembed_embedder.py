@@ -12,6 +12,7 @@ class FastEmbedEmbedder:
     """
 
     is_local = True
+    min_similarity = 0.55  # bge-small: unrelated text still scores ~0.4-0.5
 
     def __init__(self, model: str, cache_dir: str | None = None) -> None:
         try:

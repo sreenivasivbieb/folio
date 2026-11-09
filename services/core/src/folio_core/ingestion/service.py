@@ -143,13 +143,20 @@ class IngestionService:
             if base.is_file() and not self._excluded(base, root):
                 yield base
             return
+        # Roots nested inside this one (e.g. /home/me inside /) are scanned by their own job with
+        # their own settings. Walking them twice doubled the work and made files flip roots.
+        nested = {Path(r.path) for r in self.roots()
+                  if r.id != root.id and Path(r.path) != base and base in Path(r.path).parents}
         for dirpath, dirnames, filenames in os.walk(base, onerror=on_error, followlinks=False):
             d = Path(dirpath)
             dirnames[:] = [n for n in dirnames if (root.include_hidden or not n.startswith("."))
+                          and (d / n) not in nested
                           and not (d / n).is_symlink() and not self._excluded(d / n, root)
                           and (d != Path("/run") or n == "media")]
             for n in filenames:
                 p = d / n
+                if p in nested:
+                    continue
                 if ((root.include_hidden or not n.startswith(".")) and not p.is_symlink()
                         and not self._excluded(p, root) and p.is_file()):
                     if not os.access(p, os.R_OK):
@@ -200,11 +207,13 @@ class IngestionService:
         return "Scan complete: " + (progress.message or f"{queued} file(s) queued for content indexing")
 
     def _root_for(self, path: Path) -> Root | None:
+        """The most specific tracked root containing ``path`` (roots may be nested)."""
+        best: Root | None = None
         for root in self.roots():
             rp = Path(root.path)
-            if path == rp or rp in path.parents:
-                return root
-        return None
+            if (path == rp or rp in path.parents) and (best is None or len(rp.parts) > len(Path(best.path).parts)):
+                best = root
+        return best
 
     def scan_path(self, path: Path) -> None:
         """Called by the folder watcher for one changed path."""

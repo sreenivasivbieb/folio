@@ -61,13 +61,22 @@ class JobQueue:
         self._publish(job_id)
         return job_id
 
-    def claim(self) -> Job | None:
+    def claim(self, kinds: tuple[str, ...] | None = None, exclude: tuple[str, ...] = ()) -> Job | None:
+        """Take the most urgent queued job. ``kinds``/``exclude`` give workers separate lanes, so
+        a long folder scan can never occupy every worker and starve content indexing."""
+        where, args = "status = 'queued'", []
+        if kinds:
+            where += f" AND kind IN ({','.join('?' * len(kinds))})"
+            args += list(kinds)
+        if exclude:
+            where += f" AND kind NOT IN ({','.join('?' * len(exclude))})"
+            args += list(exclude)
         with self.db.write() as conn:
             r = conn.execute(
                 "UPDATE jobs SET status = 'running', attempts = attempts + 1, updated_at = ? "
-                "WHERE id = (SELECT id FROM jobs WHERE status = 'queued' "
+                f"WHERE id = (SELECT id FROM jobs WHERE {where} "
                 "            ORDER BY priority DESC, created_at LIMIT 1) RETURNING *",
-                (utcnow(),),
+                (utcnow(), *args),
             ).fetchone()
         if r is None:
             return None

@@ -17,6 +17,7 @@ class HashingEmbedder:
     """
 
     is_local = True
+    min_similarity = 0.2  # below this a vector hit is noise (calibrated on the sample corpus)
 
     def __init__(self, dim: int = 384) -> None:
         self.dim = dim

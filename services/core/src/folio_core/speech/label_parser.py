@@ -31,7 +31,20 @@ PRONOUN = re.compile(
     r"image|photo|picture|meeting|contract|deck|one))$", re.I)
 _SPLIT_STRONG = re.compile(r"[,;.!?]+")
 _SPLIT_AND = re.compile(r"\s+(?:and|but|also)\s+", re.I)
-_ARTICLE = re.compile(r"^(?:the|a|an)\s+", re.I)
+_ARTICLE = re.compile(r"^(?:the|a|an|my|our|your|his|her|their|some)\s+", re.I)
+TOPIC_TYPE = "Topic"  # built in, so topic labels work even with an older or custom schema
+_THING = r"(?:it|this|that|this one|that one|(?:this|that) (?:pdf|file|document|doc|video|recording|image|photo|picture|meeting|contract|deck|one|folder|note|notes))"
+# "tag this as finance", "label it physics", "put this under taxes", "mark this file as work"
+_TAG = re.compile(rf"(?:please )?(?:tag|label|mark|categori[sz]e|classify|file|put|save|add)\s+{_THING}"
+                  rf"(?:\s+(?:as|under|in|into|with|to|in the|under the))?(?:\s+(?:topic|category|tag|label|folder))?\s*:?\s+(?P<x>.+)", re.I)
+# "topic is X", "topics: X", "category: X", "the subject is X", "tags are X"
+_TOPIC_IS = re.compile(r"(?:the |its |this )?(?:main )?(?:topic|topics|subject|category|tag|tags|theme|keyword|keywords)"
+                       r"(?:\s+(?:is|are|was|=)|\s*:)\s*(?P<x>.+)", re.I)
+# "this is about X", "it's related to X", "this file covers X", "about X"
+_ABOUT = re.compile(rf"(?:{_THING}(?:'s|\s+is|\s+was|\s+are)?\s+(?:all\s+)?)?"
+                    r"(?:about|regarding|related to|relates to|concerning|concerns|covers|on the topic of|on)\s+(?P<x>.+)", re.I)
+# a separate list item after a topic: "about taxes, invoices and receipts"
+_LIST_ITEM = re.compile(r"(?:the |a |an )?[\w'&+.-]+(?:\s+[\w'&+.-]+){0,3}", re.I)
 
 
 @dataclass
@@ -58,6 +71,7 @@ class _Plan:
         self.unparsed: list[str] = []
         self.focus: str | None = None
         self._by_norm: dict[str, str] = {}
+        self._topic_subject: str | None = None  # set after a topic clause; lists continue it
         self._init_focus()
 
     # --- refs -----------------------------------------------------------------------------
@@ -173,15 +187,64 @@ class _Plan:
         c = o.lower()
         if not c:
             return
-        for handler in (self._status, self._merge, self._relation_phrase, self._this_is,
-                        self._the_noun_is, self._x_is_its_noun, self._attribute_phrase):
+        o = re.sub(r"^(?:and|also|plus|then|okay|ok|so|please)\s+", "", o, flags=re.I).strip()
+        c = o.lower()
+        for handler in (self._status, self._merge, self._topic, self._relation_phrase, self._this_is,
+                        self._the_noun_is, self._x_is_its_noun, self._attribute_phrase, self._topic_list_item):
+            saved = (len(self.ops), {k: dict(v) for k, v in self.refs.items()}, list(self.questions),
+                     self.focus, dict(self._by_norm))
             try:
                 if handler(o, c):
+                    if handler not in (self._topic, self._topic_list_item):
+                        self._topic_subject = None
                     return
             except InvalidInput as exc:
+                # A clause applies completely or not at all: drop anything it half-planned.
+                n, self.refs, self.questions, self.focus, self._by_norm = saved
+                del self.ops[n:]
                 self.unparsed.append(f"{o} ({exc})")
                 return
         self.unparsed.append(o)
+
+    # --- topics / tags --------------------------------------------------------------------
+
+    def _add_topic(self, subject: str, name: str) -> None:
+        name = _ARTICLE.sub("", name.strip().strip(" .:;\"'")).strip()
+        if not name or PRONOUN.match(name):
+            raise InvalidInput("say which topic")
+        key = self.ref(name)
+        ref = self.refs[key]
+        if ref["new"] and ref["type"] is None:  # a bare topic word is a Topic, not a question
+            ref["type"] = TOPIC_TYPE
+            self.questions = [q for q in self.questions if not (q["ref"] == key and q["field"] == "type")]
+        if not any(op.get("op") == "relation" and op["subject"] == subject and op["object"] == key
+                   and op["predicate"] == "about" for op in self.ops):
+            self.ops.append({"op": "relation", "subject": subject, "predicate": "about", "object": key})
+
+    def _topic(self, o: str, c: str) -> bool:
+        """'tag this as X', 'topic is X', 'this is about X', 'about X' -> about(this, X: Topic).
+        Several topics can follow: 'about taxes, invoices and receipts'."""
+        m = _TAG.fullmatch(o) or _TOPIC_IS.fullmatch(o)
+        if m is None:
+            m = _ABOUT.fullmatch(o)
+            # "on" alone is too common ("signed on March 3"); only with a leading "this/it".
+            if m and re.match(r"on\s", c) :
+                return False
+        if m is None:
+            return False
+        subject = self.this_ref()
+        for part in re.split(r"\s*(?:,|/|\band\b|&|\bor\b)\s*", m["x"]):
+            if part.strip():
+                self._add_topic(subject, part)
+        self._topic_subject = subject
+        return True
+
+    def _topic_list_item(self, o: str, c: str) -> bool:
+        """'... about taxes, invoices' — the clause after a topic is another topic."""
+        if self._topic_subject is None or not _LIST_ITEM.fullmatch(o):
+            return False
+        self._add_topic(self._topic_subject, o)
+        return True
 
     def _status(self, o: str, c: str) -> bool:
         reject = re.fullmatch(r"(?:no\s+)?(?:(?:this|that|it)(?:'s| is| was)\s+)?(?:wrong|incorrect|not right|reject(?: (?:this|that|it))?|delete(?: this| that| it)?)", c)
@@ -231,12 +294,28 @@ class _Plan:
         if not m or not PRONOUN.match(m["pron"]):
             return False
         rest = m["rest"].strip()
+        # "it was signed on March 3" sets an attribute; it does not name the thing.
+        first = re.match(r"(\w+)(?: (\w+))?", rest.lower())
+        if first and any(self._is_attribute_word(w) for w in filter(None, (first[1], first.group(0)))):
+            if self._attribute_phrase(rest, rest.lower()):
+                return True
+            raise InvalidInput(f"“{first[1]}” does not apply to this — say what it is first, e.g. “this is a contract”")
         bare = _ARTICLE.sub("", rest).strip()
         as_type = self.ctx.schema.type_for_word(bare)
         # Open schema: "it is a Course" / "this is an Algorithm" names a *type* even when no hint
         # knows it ("the X" names the thing itself).
-        if as_type is None and re.match(r"(?:a|an)\s", rest, re.I) and len(bare.split()) <= 3:
+        of_form = re.fullmatch(r"(?P<t>[\w-]+(?: [\w-]+)?) (?:of|for|by|from) (?:the )?(?P<n>.+)", bare, re.I)
+        if as_type is None and re.match(r"(?:a|an)\s", rest, re.I) and len(bare.split()) <= 3 and not of_form:
             as_type = canonical_type(bare, self.ctx.known_types)
+        if as_type is None and of_form and re.match(r"(?:a|an)\s", rest, re.I):
+            # "this is a resume of Priya" -> a Resume named "Priya resume", not a type "Resume Of Priya"
+            noun = of_form["t"]
+            bare = f"{of_form['n']} {noun}"
+            if not self.ctx.schema.type_for_word(noun.split()[-1]):
+                key = self.ref(bare)
+                if self.refs[key]["new"] and self.refs[key]["type"] is None:
+                    self.refs[key]["type"] = canonical_type(noun, self.ctx.known_types)
+                    self.questions = [q for q in self.questions if not (q["ref"] == key and q["field"] == "type")]
         if as_type:  # "it is a person" -> set/fix the type of the focus
             key = self.this_ref()
             if self.refs[key]["new"]:
@@ -306,6 +385,11 @@ class _Plan:
             return False
         self._add_attribute(attr, m["value"])
         return True
+
+    def _is_attribute_word(self, word: str) -> bool:
+        return any(word in (aname, aname.replace("_", " "), *[p.lower() for p in a.phrases])
+                   for et in self.ctx.schema.entity_types.values() for aname, a in et.attributes.items()
+                   if word not in ("on", "title", "value", "status", "role"))
 
     def _attribute_for(self, word: str) -> tuple[str, str] | None:
         """Find (entity_type, attribute) for a spoken word, preferring the focus entity's type."""

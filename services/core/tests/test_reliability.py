@@ -8,7 +8,7 @@ import time
 import uuid
 from pathlib import Path
 
-from .conftest import make_container
+from .conftest import drain, make_container
 
 WRITER = textwrap.dedent("""
     import sys
@@ -57,3 +57,29 @@ def test_interrupted_jobs_resume(tmp_path: Path, files):
     assert c2.queue.recover() == 1
     c2.workers.run_until_idle()
     assert c2.queue.get(job.id).status == "done"
+
+
+def test_scans_never_starve_indexing(container, files):
+    """A running folder scan occupies only the scan lane; content jobs are still claimable."""
+    q = container.queue
+    q.enqueue("scan_root", {"root_id": "a"}, dedupe_key="scan:a", priority=20)
+    q.enqueue("scan_root", {"root_id": "b"}, dedupe_key="scan:b", priority=20)
+    q.enqueue("index_source", {"source_id": "s"}, dedupe_key="index:s", priority=0)
+    assert q.claim(("scan_root",)).kind == "scan_root"
+    assert q.claim(None, ("scan_root",)).kind == "index_source"  # not the second scan
+
+
+def test_nested_roots_are_scanned_once(container, files):
+    from folio_core.store import repo
+
+    sub = files / "nested"
+    sub.mkdir()
+    (sub / "inner.txt").write_text("inner notes about kites")
+    container.ingestion.add_root(str(files))
+    inner = container.ingestion.add_root(str(sub))
+    outer = next(r for r in container.ingestion.roots() if r.id != inner.id)
+    walked = list(container.ingestion._iter_files(outer))
+    assert sub / "inner.txt" not in walked
+    drain(container)
+    src = repo.source_by_path(container.kdb, str((sub / "inner.txt").resolve()))
+    assert src is not None and src.root_id == inner.id
