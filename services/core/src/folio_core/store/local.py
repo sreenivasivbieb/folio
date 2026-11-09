@@ -13,7 +13,7 @@ import re
 import sqlite3
 import threading
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
@@ -158,7 +158,7 @@ class Cursor:
         store = self.collection.store
         compiled = _where(self.query)
         fast = compiled is not None and all(_expression(k) is not None for k, _ in self.order)
-        with store._write_lock:
+        with store._read_guard():
             sql, args = "SELECT body FROM documents WHERE collection = ?", [self.collection.name]
             if fast:
                 sql += " AND " + compiled[0]
@@ -209,7 +209,7 @@ class Collection:
         compiled = _where(query)
         if compiled is None:
             return len(list(self.find(query).limit(limit)))
-        with self.store._write_lock:
+        with self.store._read_guard():
             sql = "SELECT COUNT(*) FROM (SELECT 1 FROM documents WHERE collection=? AND " + compiled[0]
             sql += " LIMIT ?)"
             return self.store._reader().execute(sql, [self.name, *compiled[1], limit or -1]).fetchone()[0]
@@ -326,6 +326,14 @@ class KnowledgeDB:
         conn.create_function("regexp", 2, lambda pattern, value: bool(value is not None and re.search(pattern, str(value))))
         self._connections.append(conn)
         return conn
+
+    def _read_guard(self):  # type: ignore[no-untyped-def]
+        """Reads inside this thread's transaction use the writer connection, so they hold the
+        lock. Other reads use the thread's own WAL reader and see the last committed snapshot
+        without waiting: a long scan writing file after file no longer stalls the UI's queries."""
+        if getattr(self._local, "transaction", False):
+            return self._write_lock
+        return nullcontext()
 
     def _reader(self) -> sqlite3.Connection:
         if getattr(self._local, "transaction", False):

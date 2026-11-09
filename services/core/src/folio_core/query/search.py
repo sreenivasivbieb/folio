@@ -118,7 +118,7 @@ class HybridSearch:
                         add(sid, f"label: {lab['transcript'][:60]}")
         # 3. File names.
         like = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-        with self.kdb._write_lock:
+        with self.kdb._read_guard():
             rows = self.kdb._reader().execute(
                 "SELECT id FROM documents WHERE collection = 'sources' AND "
                 "json_extract(body, '$.path') LIKE ? ESCAPE '\\' "
