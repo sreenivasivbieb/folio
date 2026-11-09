@@ -14,7 +14,7 @@ export type Selection =
 
 export type ViewName = "graph" | "swimlane" | "timeline" | "table";
 export type LeftTab = "sources" | "review" | "activity";
-export type SettingsTab = "ai" | "voice" | "privacy" | "hints" | "data" | "drive";
+export type SettingsTab = "ai" | "voice" | "privacy" | "hints" | "data" | "drive" | "appearance";
 
 interface UiState {
   selection: Selection;

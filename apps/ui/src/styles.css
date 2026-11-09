@@ -1,5 +1,5 @@
 /* ============================================================================================
-   Folio design system. Light and dark follow the OS; all colour lives in tokens.
+   Folio design system. Light by default; dark via [data-theme="dark"] (Settings → Appearance). All colour lives in tokens.
    ============================================================================================ */
 :root {
   /* Soft, airy SaaS look: cool off-white canvas, white cards, ink-black primary actions,
@@ -50,42 +50,40 @@
   -webkit-font-smoothing: antialiased;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0b0b10;
-    --surface: #131319;
-    --surface-2: #1a1a22;
-    --surface-3: #24242e;
-    --border: #23232c;
-    --border-strong: #33333f;
-    --text: #f1f1f5;
-    --text-2: #a9a9b6;
-    --text-3: #6f6f7d;
-    --accent: #7b93ff;
-    --accent-hover: #95a8ff;
-    --accent-text: #0b0b10;
-    --accent-soft: rgb(123 147 255 / 13%);
-    --violet: #a08bff;
-    --violet-soft: rgb(160 139 255 / 14%);
-    --pink: #f57ab5;
-    --pink-soft: rgb(245 122 181 / 13%);
-    --primary: #f4f4f7;
-    --primary-hover: #ffffff;
-    --primary-text: #0b0b10;
-    --glow-a: rgb(124 92 246 / 14%);
-    --glow-b: rgb(236 79 156 / 8%);
-    --brand-gradient: linear-gradient(135deg, #5b7cff 0%, #8f74ff 55%, #f06aa9 100%);
-    --ok: #4ade80;
-    --ok-soft: rgb(74 222 128 / 12%);
-    --warn: #fbbf24;
-    --warn-soft: rgb(251 191 36 / 12%);
-    --bad: #fb7185;
-    --bad-soft: rgb(251 113 133 / 12%);
-    --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
-    --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 10px 30px rgb(0 0 0 / 35%);
-    --shadow-lg: 0 30px 70px rgb(0 0 0 / 55%);
-    color-scheme: dark;
-  }
+:root[data-theme="dark"] {
+  --bg: #0b0b10;
+  --surface: #131319;
+  --surface-2: #1a1a22;
+  --surface-3: #24242e;
+  --border: #23232c;
+  --border-strong: #33333f;
+  --text: #f1f1f5;
+  --text-2: #a9a9b6;
+  --text-3: #6f6f7d;
+  --accent: #7b93ff;
+  --accent-hover: #95a8ff;
+  --accent-text: #0b0b10;
+  --accent-soft: rgb(123 147 255 / 13%);
+  --violet: #a08bff;
+  --violet-soft: rgb(160 139 255 / 14%);
+  --pink: #f57ab5;
+  --pink-soft: rgb(245 122 181 / 13%);
+  --primary: #f4f4f7;
+  --primary-hover: #ffffff;
+  --primary-text: #0b0b10;
+  --glow-a: rgb(124 92 246 / 14%);
+  --glow-b: rgb(236 79 156 / 8%);
+  --brand-gradient: linear-gradient(135deg, #5b7cff 0%, #8f74ff 55%, #f06aa9 100%);
+  --ok: #4ade80;
+  --ok-soft: rgb(74 222 128 / 12%);
+  --warn: #fbbf24;
+  --warn-soft: rgb(251 191 36 / 12%);
+  --bad: #fb7185;
+  --bad-soft: rgb(251 113 133 / 12%);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
+  --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 10px 30px rgb(0 0 0 / 35%);
+  --shadow-lg: 0 30px 70px rgb(0 0 0 / 55%);
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -110,6 +108,11 @@ a:hover { text-decoration: underline; }
   grid-template-rows: 52px minmax(0, 1fr) auto;
   grid-template-areas: "top top top" "left main right" "left voice right";
 }
+/* Tiling window managers often give Folio half a screen: narrow the side panels (same content)
+   so the main view keeps usable room instead of wrapping every line. */
+@media (max-width: 1280px) { .app { grid-template-columns: 240px minmax(0, 1fr) 320px; } }
+@media (max-width: 1040px) { .app { grid-template-columns: 210px minmax(0, 1fr) 270px; } .searchbox { width: min(300px, 32vw); } }
+@media (max-width: 860px) { .app { grid-template-columns: 180px minmax(0, 1fr) 240px; } .searchbox { width: min(220px, 30vw); } }
 .topbar { grid-area: top; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
 .sidebar { grid-area: left; border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
 .main { grid-area: main; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: radial-gradient(60% 50% at 0% 0%, var(--glow-a), transparent 70%), radial-gradient(55% 45% at 100% 100%, var(--glow-b), transparent 70%), var(--bg); }

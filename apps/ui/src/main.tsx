@@ -6,7 +6,10 @@ import { ApiProvider } from "@/api/client";
 import { inTauri, resolveConnection } from "@/api/connection";
 import { checkCore } from "@/api/health";
 import { Layout } from "@/app/Layout";
+import { initTheme } from "@/lib/theme";
 import "./styles.css";
+
+initTheme(); // before the first paint, so there is no flash of the wrong theme
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 5_000, refetchOnWindowFocus: false, retry: 1 } },

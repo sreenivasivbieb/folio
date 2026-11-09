@@ -6,6 +6,7 @@ import { Icon, type IconName } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
 import { EXPORT_FORMATS, exportFile } from "@/features/export/exportFile";
 import { platform } from "@/lib/format";
+import { setTheme, type ThemePref, useTheme } from "@/lib/theme";
 import { type SettingsTab, ui } from "@/state/selection";
 import { toast } from "@/state/toast";
 import { DriveTab } from "./DriveTab";
@@ -17,6 +18,7 @@ const TABS: { id: SettingsTab; label: string; icon: IconName }[] = [
   { id: "hints", label: "Type hints", icon: "layers" },
   { id: "data", label: "Data", icon: "database" },
   { id: "drive", label: "Google Drive", icon: "cloud" },
+  { id: "appearance", label: "Appearance", icon: "sun" },
 ];
 
 export function SettingsModal() {
@@ -38,6 +40,7 @@ export function SettingsModal() {
           {tab === "hints" && <HintsTab />}
           {tab === "data" && <DataTab />}
           {tab === "drive" && <DriveTab />}
+          {tab === "appearance" && <AppearanceTab />}
         </div>
       </div>
     </Modal>
@@ -322,5 +325,27 @@ function DataTab() {
         </div>
       </div>
     </div>
+  );
+}
+
+function AppearanceTab() {
+  const theme = useTheme();
+  const options: { id: ThemePref; label: string; icon: IconName }[] = [
+    { id: "light", label: "Light", icon: "sun" },
+    { id: "dark", label: "Dark", icon: "moon" },
+    { id: "system", label: "System", icon: "monitor" },
+  ];
+  return (
+    <>
+      <h2>Appearance</h2>
+      <p className="lead">Light is Folio's default look. System follows your desktop's light or dark setting.</p>
+      <div className="seg" role="tablist">
+        {options.map((o) => (
+          <button key={o.id} type="button" role="tab" aria-selected={theme === o.id} onClick={() => setTheme(o.id)}>
+            <Icon name={o.icon} /> {o.label}
+          </button>
+        ))}
+      </div>
+    </>
   );
 }
