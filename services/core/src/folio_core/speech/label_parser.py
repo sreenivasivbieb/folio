@@ -22,12 +22,12 @@ from typing import Any
 
 from ..domain.errors import InvalidInput
 from ..domain.rules import normalize_name
-from ..domain.schema import SchemaDef, canonical_type
+from ..domain.schema import SchemaDef, canonical_predicate, canonical_type
 from ..domain.values import coerce
 from ..learning import GazetteerEntry
 
 PRONOUN = re.compile(
-    r"^(?:it|this|that|this one|that one|(?:this|that) (?:pdf|file|document|doc|video|recording|"
+    r"^(?:it|this|that|this one|that one|he|she|they|him|her|them|(?:this|that) (?:pdf|file|document|doc|video|recording|"
     r"image|photo|picture|meeting|contract|deck|one))$", re.I)
 _SPLIT_STRONG = re.compile(r"[,;.!?]+")
 _SPLIT_AND = re.compile(r"\s+(?:and|but|also)\s+", re.I)
@@ -190,7 +190,8 @@ class _Plan:
         o = re.sub(r"^(?:and|also|plus|then|okay|ok|so|please)\s+", "", o, flags=re.I).strip()
         c = o.lower()
         for handler in (self._status, self._merge, self._topic, self._relation_phrase, self._this_is,
-                        self._the_noun_is, self._x_is_its_noun, self._attribute_phrase, self._topic_list_item):
+                        self._the_noun_is, self._x_is_noun_of_y, self._x_is_its_noun, self._attribute_phrase,
+                        self._topic_list_item):
             saved = (len(self.ops), {k: dict(v) for k, v in self.refs.items()}, list(self.questions),
                      self.focus, dict(self._by_norm))
             try:
@@ -211,9 +212,14 @@ class _Plan:
     def _free_text(self, o: str) -> bool:
         """Anything else said about a file is kept as its description (searchable, editable)
         instead of being thrown away: "lexsi hackathon video demo"."""
-        if self.ctx.target_kind not in ("source", "chunk") or not self.ctx.source_id or len(o.strip()) < 2:
+        if len(o.strip()) < 2:
             return False
-        key = self.this_ref()
+        if self.ctx.target_kind in ("source", "chunk") and self.ctx.source_id:
+            key = self.this_ref()
+        elif self.ctx.target_kind == "entity" and self.focus:
+            key = self.focus  # a note about the selected person / topic / project
+        else:
+            return False
         self.ops.append({"op": "attribute", "entity": key, "attribute": "description", "value": o.strip(), "dated": False})
         # "weekly sync call recording about finance" -> also tag it "finance".
         m = re.search(r"\b(?:about|regarding|related to|relating to|on the topic of|concerning)\s+(?P<x>[\w&' -]{2,60})$", o.strip(), re.I)
@@ -301,6 +307,8 @@ class _Plan:
             m = re.fullmatch(rf"(?P<s>.+?)\s+{re.escape(phrase)}\s+(?P<o>.+)", o, re.I)
             if not m:
                 continue
+            if re.match(r"(?:in|on|at|since|from|as|during|by|for|to|last|next|\d)\b", m["o"].strip(), re.I):
+                continue  # "joined in 2024 as an intern" is not a link to an entity named "in 2024..."
             s = self.ref(m["s"], rel.source)
             ob = self.ref(m["o"], rel.target)
             self.ops.append({"op": "relation", "subject": s, "predicate": name, "object": ob})
@@ -377,6 +385,23 @@ class _Plan:
             self._add_attribute(attr, value)
             return True
         raise InvalidInput(f"'{noun}' is not an attribute or relation in the schema")
+
+    def _x_is_noun_of_y(self, o: str, c: str) -> bool:
+        """'Rahul is the lead of Atlas Project' / 'Priya is a member of the design team'."""
+        m = re.fullmatch(r"(?P<x>.+?) (?:is|was|are|were) (?:the|a|an|its|his|her|their) (?P<noun>[\w-]+(?: [\w-]+)?) (?:of|for|at|in) (?P<y>.+)", o, re.I)
+        if not m or PRONOUN.match(m["y"].strip()):
+            return False  # "... the owner of it" is handled by _x_is_its_noun
+        noun = m["noun"].lower().strip()
+        for name, rel in self.ctx.schema.relation_types.items():
+            if rel.noun and rel.noun == noun:
+                self.ops.append({"op": "relation", "subject": self.ref(m["x"], rel.source),
+                                 "predicate": name, "object": self.ref(m["y"], rel.target)})
+                return True
+        if self._attribute_for(noun):
+            return False  # "the deadline of ..." style: leave it to the attribute handlers
+        self.ops.append({"op": "relation", "subject": self.ref(m["x"]),
+                         "predicate": canonical_predicate(f"{noun} of"), "object": self.ref(m["y"])})
+        return True
 
     def _x_is_its_noun(self, o: str, c: str) -> bool:
         """'Priya is its owner' / 'Acme is the party' — the reverse of 'the owner is Priya'

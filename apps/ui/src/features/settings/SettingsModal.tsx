@@ -317,7 +317,7 @@ function DataTab() {
       </div>
       <div className="field">
         <label htmlFor="local-backup">Restore a local JSON backup (empty project only)</label>
-        <input id="local-backup" type="file" accept="application/json,.json" disabled={importBackup.isPending} onChange={(event) => {
+        <input id="local-backup" className="file-input" type="file" accept="application/json,.json" disabled={importBackup.isPending} onChange={(event) => {
           const file = event.target.files?.[0]; if (file) importBackup.mutate(file);
           event.target.value = "";
         }} />

@@ -7,6 +7,7 @@ import { inTauri, resolveConnection } from "@/api/connection";
 import { checkCore } from "@/api/health";
 import { Layout } from "@/app/Layout";
 import { initTheme } from "@/lib/theme";
+import { Logo } from "@/components/Logo";
 import "./styles.css";
 
 initTheme(); // before the first paint, so there is no flash of the wrong theme
@@ -59,13 +60,14 @@ function Boot() {
   if (!conn) {
     const failed = !!error;
     return (
-      <div className="empty-state" style={{ height: "100%" }}>
-        <div className="glyph" style={{ background: "var(--brand-gradient)", color: "white" }}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={failed ? "" : "spin"}>
-            <path d="M21 12a9 9 0 1 1-6.22-8.56" />
-          </svg>
-        </div>
-        <h3>{failed ? "Waiting for the Folio backend" : "Starting Folio…"}</h3>
+      <div className="splash">
+        <Logo size={112} animated={!failed} />
+        <div className="splash-word">Folio</div>
+        {!failed && <>
+          <div className="splash-bar"><div /></div>
+          <div className="splash-hint"><SplashHint /></div>
+        </>}
+        {failed && <h3 className="splash-title">Waiting for the Folio <b>backend</b></h3>}
         {failed && <div className="stack" style={{ maxWidth: 600, textAlign: "center", gap: 12 }}>
           <p role="alert">{error}</p>
           <p>{inTauri
@@ -84,6 +86,18 @@ function Boot() {
       </QueryClientProvider>
     </ApiProvider>
   );
+}
+
+const HINTS = ["Opening your vault…", "Loading your knowledge…", "Warming up search…"];
+
+/** Rotates a short status line while the local core starts. */
+function SplashHint() {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const t = window.setInterval(() => setI((n) => (n + 1) % HINTS.length), 1400);
+    return () => window.clearInterval(t);
+  }, []);
+  return <span key={i} className="splash-hint-text">{HINTS[i]}</span>;
 }
 
 createRoot(document.getElementById("root")!).render(

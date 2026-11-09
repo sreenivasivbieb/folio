@@ -40,14 +40,16 @@ export function SwimlaneView() {
     const ro = new ResizeObserver(() => setWidth(Math.max(480, el.clientWidth - TITLE_W - 16)));
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+    // Re-attach once data arrives: on the first render the lane container may not exist yet,
+    // and the lanes then stayed laid out for the 900px default (later dates fell off-screen).
+  }, [!!data]);
 
   const scale = useMemo(() => {
     const dates = (data?.lanes ?? []).flatMap((l) => l.items.map((i) => toDate(i.valid_from!)));
     const min = dates.length ? new Date(Math.min(...dates.map(Number))) : new Date();
     const max = dates.length ? new Date(Math.max(...dates.map(Number))) : new Date();
     const pad = Math.max(7 * 86400e3, (Number(max) - Number(min)) * 0.06);
-    return scaleTime().domain([new Date(Number(min) - pad), new Date(Number(max) + pad)]).range([8, width - 160]); // leave room for the last chip's label
+    return scaleTime().domain([new Date(Number(min) - pad), new Date(Number(max) + pad)]).range([8, width - 250]); // leave room for the last chip (up to 240px wide)
   }, [data, width]);
 
   if (!data) return <div className="empty-inline"><Icon name="loader" spin /></div>;

@@ -492,3 +492,57 @@ textarea.schema { width: 100%; min-height: 46vh; font-family: var(--mono); font-
 .file-labels { margin: 12px 0; padding: 12px 14px; border-radius: var(--radius-lg); border: 1px solid var(--hairline); background: var(--card); }
 .file-labels-desc { margin: 6px 0 2px; font-size: 13.5px; color: var(--text); line-height: 1.5; }
 .file-labels .file-tags { margin-top: 8px; }
+
+
+/* small fixes */
+.seg button { white-space: nowrap; }
+.topbar-add { height: 30px; padding: 0 12px; }
+.file-input { font-size: 12.5px; color: var(--text-2); }
+.file-input::file-selector-button { height: 30px; margin-right: 10px; padding: 0 13px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font: inherit; font-weight: 500; }
+.file-input::file-selector-button:hover { background: var(--surface-2); }
+
+
+/* ---- logo and animated loading screen ------------------------------------------------------ */
+.logo { display: block; flex: none; }
+.brand .logo { filter: drop-shadow(0 3px 8px rgb(124 92 246 / 25%)); }
+.splash { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  background: radial-gradient(45% 40% at 50% 42%, var(--glow-a), transparent 70%),
+              radial-gradient(40% 35% at 62% 60%, var(--glow-b), transparent 70%), var(--canvas, var(--bg)); }
+.splash .logo { filter: drop-shadow(0 18px 40px rgb(124 92 246 / 30%)); }
+.splash-word { font-size: 30px; font-weight: 300; letter-spacing: -0.04em; color: var(--text); margin-top: 4px;
+  animation: splash-rise 0.7s 0.15s cubic-bezier(.2,.8,.2,1) both; }
+.splash-bar { width: 160px; height: 3px; border-radius: 3px; background: var(--surface-3); overflow: hidden; margin-top: 6px; }
+.splash-bar > div { width: 40%; height: 100%; border-radius: 3px; background: var(--brand-gradient); animation: splash-slide 1.3s ease-in-out infinite; }
+.splash-hint { height: 18px; font-size: 12.5px; color: var(--text-3); }
+.splash-hint-text { display: inline-block; animation: splash-rise 0.45s ease-out both; }
+.splash-title { margin: 0; font-size: 22px; font-weight: 350; letter-spacing: -0.03em; }
+.splash-title b { font-weight: 650; }
+.splash .stack p { color: var(--text-2); margin: 0; }
+
+.logo-animated .logo-tile { transform-origin: 512px 512px; animation: logo-breathe 2.6s ease-in-out infinite; }
+.logo-animated .logo-back { transform-box: fill-box; transform-origin: 50% 100%;
+  animation: logo-back-in 0.9s cubic-bezier(.2,.8,.2,1) both, logo-sway 2.6s 0.9s ease-in-out infinite; }
+.logo-animated .logo-front { transform-box: fill-box; transform-origin: 50% 100%; animation: logo-front-in 0.8s 0.1s cubic-bezier(.2,.8,.2,1) both; }
+.logo-animated .logo-edges line { stroke-dasharray: 1; stroke-dashoffset: 1; animation: logo-draw 2.6s ease-in-out infinite; }
+.logo-animated .logo-edges line:nth-child(2) { animation-delay: 0.15s; }
+.logo-animated .logo-edges line:nth-child(3) { animation-delay: 0.3s; }
+.logo-animated .logo-node { transform-box: fill-box; transform-origin: center; animation: logo-pop 2.6s ease-in-out infinite; }
+.logo-animated .logo-node.n2 { animation-delay: 0.2s; }
+.logo-animated .logo-node.n3 { animation-delay: 0.4s; }
+
+@keyframes logo-breathe { 50% { transform: scale(1.015); } }
+@keyframes logo-back-in { from { opacity: 0; transform: rotate(-14deg) translateY(30px); } to { opacity: 1; transform: none; } }
+@keyframes logo-front-in { from { opacity: 0; transform: translateY(60px) scale(0.92); } to { opacity: 1; transform: none; } }
+@keyframes logo-sway { 50% { transform: rotate(3deg); } }
+@keyframes logo-draw { 0%, 12% { stroke-dashoffset: 1; } 40%, 80% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -1; } }
+@keyframes logo-pop { 0%, 8% { transform: scale(0); } 22% { transform: scale(1.18); } 30%, 82% { transform: scale(1); } 100% { transform: scale(0); } }
+@keyframes splash-slide { from { transform: translateX(-110%); } to { transform: translateX(260%); } }
+@keyframes splash-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-animated *, .splash-bar > div, .splash-word, .splash-hint-text { animation: none !important; }
+  .logo-animated .logo-edges line { stroke-dashoffset: 0; }
+}
+.splash .stack { align-items: center; padding: 0 16px; }
+.splash .stack .btn { align-self: center; }

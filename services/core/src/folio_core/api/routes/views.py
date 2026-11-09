@@ -52,9 +52,10 @@ def table(c: C, entity_id: str | None = None, status: list[str] | None = Query(d
 def search(q: str, c: C, k: int = 20) -> SearchResult:
     """Entity query by text (voice queries use the same endpoint with the transcript)."""
     if len(q.strip()) < 2:  # before typing: recent files and the most connected entities
-        return SearchResult(entities=repo.search_entities(c.kdb, "", limit=8), passages=[],
+        return SearchResult(entities=[e for e in repo.search_entities(c.kdb, "", limit=14) if e.type != "Document"][:8], passages=[],
                             files=c.search.recent_files(8))  # type: ignore[arg-type]
-    entities = repo.search_entities(c.kdb, q, limit=10)
+    # Files are listed in their own group: their Document entities would only duplicate them.
+    entities = [e for e in repo.search_entities(c.kdb, q, limit=14) if e.type != "Document"][:10]
     return SearchResult(entities=entities, passages=c.search.search(q, k),  # type: ignore[arg-type]
                         files=c.search.files(q, entities))  # type: ignore[arg-type]
 

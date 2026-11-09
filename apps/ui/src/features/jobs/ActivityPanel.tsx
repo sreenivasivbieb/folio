@@ -80,7 +80,7 @@ export function ActivityPanel() {
     <>
       <div className="sidebar-head">
         <div className="seg" style={{ width: "100%" }}>
-          <button type="button" style={{ flex: 1, justifyContent: "center" }} aria-selected={tab === "jobs"} onClick={() => setTab("jobs")}>Background work</button>
+          <button type="button" style={{ flex: 1, justifyContent: "center" }} aria-selected={tab === "jobs"} onClick={() => setTab("jobs")}>In progress</button>
           <button type="button" style={{ flex: 1, justifyContent: "center" }} aria-selected={tab === "history"} onClick={() => setTab("history")}>History</button>
         </div>
       </div>

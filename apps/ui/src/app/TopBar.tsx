@@ -1,7 +1,8 @@
 /** Top bar: search, background-work indicator, privacy (always visible), undo/redo, settings. */
 import { useJobs, useKnowledgeActions, useStatus } from "@/api/queries";
 import { Icon } from "@/components/Icon";
-import { openSettings, ui } from "@/state/selection";
+import { Logo } from "@/components/Logo";
+import { openAdd, openSettings, ui } from "@/state/selection";
 
 function WorkIndicator() {
   const { data: jobs } = useJobs();
@@ -28,13 +29,16 @@ export function TopBar() {
   return (
     <header className="topbar">
       <div className="brand">
-        <div className="brand-mark"><Icon name="layers" size={15} /></div>
+        <Logo size={28} />
         Folio
       </div>
       <button type="button" className="searchbox" onClick={() => ui.set({ modal: "search" })}>
         <Icon name="search" />
         <span className="label">Search files, topics, people, text…</span>
         <span className="kbd">/</span>
+      </button>
+      <button type="button" className="btn primary sm topbar-add" onClick={() => openAdd()} title="Add files or folders (or drop them on the window)">
+        <Icon name="plus" size={14} /> Add
       </button>
       <span className="spacer" />
       <WorkIndicator />
