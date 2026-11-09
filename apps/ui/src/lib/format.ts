@@ -1,7 +1,9 @@
 import type { Claim, Locator } from "@folio/api-client";
 
 export function basename(path: string): string {
-  return path.split(/[\\/]/).pop() ?? path;
+  // "/" and drive roots ("C:\\") have no last segment: show the path itself, not a blank name.
+  const trimmed = path.replace(/[\\/]+$/, "");
+  return trimmed.split(/[\\/]/).pop() || path;
 }
 
 export function seconds(t: number | null | undefined): string {

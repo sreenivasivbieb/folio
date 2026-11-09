@@ -325,7 +325,7 @@ mark { background: rgb(255 214 0 / 40%); color: inherit; padding: 0 2px; border-
 .question { border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); background: var(--warn-soft); border-radius: var(--radius); padding: 10px 12px; margin: 10px 0; }
 
 /* ---- modal, palette, toasts ------------------------------------------------------------ */
-.overlay { position: fixed; inset: 0; background: rgb(15 15 30 / 28%); backdrop-filter: blur(6px); display: flex; align-items: flex-start; justify-content: center; padding-top: 9vh; z-index: 50; animation: fade-in 0.12s ease-out; }
+.overlay { position: fixed; inset: 0; background: rgb(15 15 30 / 22%); backdrop-filter: blur(3px); display: flex; align-items: flex-start; justify-content: center; padding-top: 9vh; z-index: 50; animation: fade-in 0.12s ease-out; }
 .modal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); width: min(640px, 94vw); max-height: 80vh; display: flex; flex-direction: column; overflow: hidden; }
 .modal.wide { width: min(860px, 94vw); }
 .modal header { padding: 15px 18px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 14.5px; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; }
