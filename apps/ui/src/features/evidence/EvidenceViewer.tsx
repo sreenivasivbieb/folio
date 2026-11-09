@@ -8,7 +8,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useApi } from "@/api/client";
 import { useChunks, useLabel, useSource } from "@/api/queries";
 import { basename, fileSize, locatorLabel } from "@/lib/format";
-import { ui } from "@/state/selection";
+import { selectEntity, ui } from "@/state/selection";
 import { Icon } from "@/components/Icon";
 import { PdfPage } from "./PdfPage";
 
@@ -134,9 +134,26 @@ export function SourceViewer({ sourceId }: { sourceId: string }) {
       {src.kind === "pdf" && <PdfPage url={fileUrl} page={1} />}
       {(src.kind === "video" || src.kind === "audio") && <Media url={fileUrl} kind={src.kind} />}
       {src.kind === "image" && <ImageRegion url={fileUrl} />}
-      <div className="callout" style={{ margin: "12px 0" }}>
-        <Icon name="mic" />
-        <span>This file is selected: say or type what it is below — e.g. “This PDF is the networks lecture, Dr. Jaiswal teaches it”.</span>
+      <div className="file-labels">
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <span className="field-label" style={{ margin: 0 }}>Labels</span>
+          <button type="button" className="btn ghost sm" onClick={() => document.getElementById("label-input")?.focus()}>
+            <Icon name="tag" size={13} /> Add label
+          </button>
+        </div>
+        {detail.description && <p className="file-labels-desc">{detail.description}</p>}
+        {!!detail.tags?.length && (
+          <div className="file-tags">
+            {detail.tags.map((t) => (
+              <button type="button" key={t.id} className="tag-chip sm" title={t.type} onClick={() => selectEntity(t.id)}>{t.name}</button>
+            ))}
+          </div>
+        )}
+        {!detail.description && !detail.tags?.length && (
+          <p className="small muted" style={{ margin: "4px 0 0" }}>
+            Not labelled yet. Describe it below in your own words — type, or hold <span className="kbd">Ctrl</span>+<span className="kbd">Space</span> and speak.
+          </p>
+        )}
       </div>
       <div className="stack">
         {(chunks ?? []).slice(0, 60).map((c) => (

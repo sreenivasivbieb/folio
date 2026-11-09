@@ -100,7 +100,8 @@ export function GraphView() {
       edgeLabelSize: 10,
       labelSize: 13,
       labelWeight: "500",
-      labelDensity: 0.6,
+      // Small graphs: show every label. Large ones: thin them out so they stay readable.
+      labelDensity: graph.order <= 80 ? 4 : 0.6,
       labelGridCellSize: 110,
       enableEdgeEvents: true,
       defaultEdgeType: "arrow",

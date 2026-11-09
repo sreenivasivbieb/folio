@@ -412,6 +412,8 @@ class GroupEntry(BaseModel):
 class SourceDetail(BaseModel):
     source: Source
     chunks: int
+    tags: list[TagRef] = Field(default_factory=list)
+    description: str | None = None
 
 
 class VoiceToggle(BaseModel):

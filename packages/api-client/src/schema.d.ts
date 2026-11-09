@@ -2236,6 +2236,10 @@ export interface components {
             source: components["schemas"]["Source"];
             /** Chunks */
             chunks: number;
+            /** Tags */
+            tags?: components["schemas"]["TagRef"][];
+            /** Description */
+            description?: string | null;
         };
         /**
          * SourceKind

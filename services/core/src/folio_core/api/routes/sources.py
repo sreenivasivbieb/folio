@@ -87,7 +87,8 @@ def get_source(source_id: str, c: C) -> SourceDetail:
     if src is None:
         raise NotFound(f"source {source_id} not found")
     n = c.index.reader().execute("SELECT COUNT(*) FROM chunks WHERE source_id = ?", (source_id,)).fetchone()[0]
-    return SourceDetail(source=src, chunks=n)
+    org = repo.file_organization(c.kdb, [source_id]).get(source_id, {})
+    return SourceDetail(source=src, chunks=n, **org)
 
 
 @router.get("/sources/{source_id}/chunks", response_model=list[Chunk])
