@@ -19,9 +19,20 @@ function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#888";
 }
 
-function alpha(hex: string, a: number): string {
-  const n = Number.parseInt(hex.replace("#", ""), 16);
-  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+function rgb(color: string): [number, number, number] {
+  const m = color.match(/^#?([0-9a-f]{6})$/i);
+  if (!m) return [136, 136, 136];
+  const n = Number.parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** Solid tint of ``color`` towards the canvas: readable on white and on dark, unlike rgba alpha
+ * (WebGL blending made "faded" nodes and edges almost invisible on the light theme). */
+function tint(color: string, amount: number): string {
+  const [r, g, b] = rgb(color);
+  const [br, bg, bb] = rgb(cssVar("--surface"));
+  const mix = (a: number, z: number) => Math.round(a + (z - a) * amount);
+  return `rgb(${mix(r, br)}, ${mix(g, bg)}, ${mix(b, bb)})`;
 }
 
 function buildGraph(data: GraphData, schema: SchemaDef | null): Graph {
@@ -33,8 +44,9 @@ function buildGraph(data: GraphData, schema: SchemaDef | null): Graph {
       label: node.name,
       x: Math.cos(angle) * 100 + Math.random(),
       y: Math.sin(angle) * 100 + Math.random(),
-      size: 5 + Math.min(14, Math.sqrt(node.degree) * 3),
-      color: node.status === "verified" ? typeColor(schema, node.type) : alpha(typeColor(schema, node.type), 0.55),
+      size: (node.type === "Document" ? 4 : 6) + Math.min(14, Math.sqrt(node.degree) * 3),
+      // Confirmed: full colour. Proposed (awaiting review): a lighter tint of the same colour.
+      color: node.status === "verified" ? typeColor(schema, node.type) : tint(typeColor(schema, node.type), 0.35),
       entityType: node.type,
       status: node.status,
     });
@@ -44,8 +56,8 @@ function buildGraph(data: GraphData, schema: SchemaDef | null): Graph {
     const proposed = e.status === "proposed";
     g.addDirectedEdgeWithKey(e.id, e.source, e.target, {
       label: predicateLabel(e.predicate),
-      size: proposed ? 1 : 2.2,
-      color: e.status === "rejected" ? alpha(cssVar("--bad"), 0.5) : proposed ? alpha(cssVar("--warn"), 0.45) : cssVar("--text-3"),
+      size: proposed ? 1.2 : 2.4,
+      color: e.status === "rejected" ? tint(cssVar("--bad"), 0.4) : proposed ? tint(cssVar("--text-3"), 0.25) : cssVar("--text-2"),
       type: "arrow",
       status: e.status,
     });
@@ -84,7 +96,10 @@ export function GraphView() {
       // Sigma throws, and the error used to unmount the entire app (blank window).
       allowInvalidContainer: true,
       // Edge labels only while the graph is small enough to read them; hover shows the rest.
-      renderEdgeLabels: graph.size <= 60,
+      renderEdgeLabels: graph.size <= 40,
+      edgeLabelSize: 10,
+      labelSize: 13,
+      labelWeight: "500",
       labelDensity: 0.6,
       labelGridCellSize: 110,
       enableEdgeEvents: true,
@@ -174,7 +189,7 @@ export function GraphView() {
           {Array.from(new Set(data.nodes.map((n) => n.type))).sort().map((t) => (
             <span key={t} className="row"><span className="dot" style={{ background: typeColor(schema, t) }} />{t}</span>
           ))}
-          <span className="muted">solid = confirmed · faded = proposed</span>
+          <span className="muted">bold = confirmed · light = awaiting review</span>
         </div>}
       </div>
     </div>

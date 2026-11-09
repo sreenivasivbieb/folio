@@ -9,7 +9,9 @@ export function useShortcuts(): void {
   const { undo, redo } = useKnowledgeActions();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const typing = !!(e.target as HTMLElement).closest("input, textarea, select, [contenteditable]");
+      // Only real text entry counts as typing: a focused checkbox or button must not swallow "/" or 1–4.
+      const typing = !!(e.target as HTMLElement).closest(
+        'input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="range"]), textarea, select, [contenteditable]');
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === "k") {
         e.preventDefault();
