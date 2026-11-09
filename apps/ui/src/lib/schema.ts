@@ -24,8 +24,9 @@ export interface SchemaDef {
 }
 
 // Distinct, readable on light and dark. New types get a stable colour from their name.
-const PALETTE = ["#6e6ef2", "#e5484d", "#30a46c", "#f76b15", "#8e4ec6", "#0090ff", "#d6409f",
-  "#12a594", "#ad7f58", "#e54666", "#5b5bd6", "#978365", "#3e63dd", "#46a758"];
+// Matches the app theme: blue, violet, pink first, then softer companions.
+const PALETTE = ["#3d63f5", "#7c5cf6", "#ec4f9c", "#14b8a6", "#f59e0b", "#0ea5e9", "#a855f7",
+  "#f43f5e", "#22c55e", "#6366f1", "#d946ef", "#f97316", "#06b6d4", "#84cc16"];
 
 function hashColor(type: string): string {
   let h = 0;

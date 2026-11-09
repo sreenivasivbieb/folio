@@ -57,7 +57,7 @@ function Boot() {
     const failed = !!error;
     return (
       <div className="empty-state" style={{ height: "100%" }}>
-        <div className="glyph" style={{ background: "linear-gradient(135deg, #6e6ef2, #4848c8)", color: "white" }}>
+        <div className="glyph" style={{ background: "var(--brand-gradient)", color: "white" }}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={failed ? "" : "spin"}>
             <path d="M21 12a9 9 0 1 1-6.22-8.56" />
           </svg>

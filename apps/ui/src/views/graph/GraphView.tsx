@@ -45,7 +45,7 @@ function buildGraph(data: GraphData, schema: SchemaDef | null): Graph {
     g.addDirectedEdgeWithKey(e.id, e.source, e.target, {
       label: predicateLabel(e.predicate),
       size: proposed ? 1 : 2.2,
-      color: e.status === "rejected" ? alpha("#c0392b", 0.5) : proposed ? alpha("#b26b00", 0.45) : cssVar("--text-3"),
+      color: e.status === "rejected" ? alpha(cssVar("--bad"), 0.5) : proposed ? alpha(cssVar("--warn"), 0.45) : cssVar("--text-3"),
       type: "arrow",
       status: e.status,
     });
