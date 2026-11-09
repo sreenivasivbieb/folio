@@ -20,7 +20,7 @@ from .index_db import dumps, loads, utcnow
 from .local import KnowledgeDB
 from .local import Session as ClientSession
 
-HIDDEN_SOURCE_STATUSES = ["forgotten", "removed"]
+HIDDEN_SOURCE_STATUSES = ["forgotten", "removed", "trashed"]
 
 
 # --- settings & schema hints ----------------------------------------------------------------

@@ -37,6 +37,7 @@ class SourceStatus(StrEnum):
     FORGOTTEN = "forgotten"  # the user asked to forget it: never re-indexed
     REMOVED = "removed"  # its folder was removed from Folio: knowledge kept, index dropped
     METADATA = "metadata"  # searchable file information; no parser for its contents
+    TRASHED = "trashed"  # in Folio's trash: hidden, restorable until the trash is emptied
 
 
 class EntityStatus(StrEnum):
@@ -107,6 +108,7 @@ class Source(BaseModel):
     status: SourceStatus
     error: str | None = None
     updated_at: str
+    origin_path: str | None = None  # where a dumped file came from (vault imports)
 
 
 class Chunk(BaseModel):

@@ -21,6 +21,7 @@ from .extraction.service import ExtractionService
 from .extraction.types import Extractor
 from .ingestion.registry import ParserRegistry
 from .ingestion.service import IngestionService
+from .ingestion.vault import Vault
 from .ingestion.watcher import FolderWatcher
 from .jobs import Job, JobQueue, WorkerPool
 from .knowledge import KnowledgeService
@@ -67,6 +68,7 @@ class Container:
     workers: WorkerPool
     watcher: FolderWatcher
     drive: DriveService
+    vault: Vault
 
     def current_extractor(self) -> Extractor:
         return self.extraction.extractor()
@@ -74,6 +76,7 @@ class Container:
     def start(self, background_scan: bool = True) -> None:
         for db in (self.kdb, self.index):  # before any worker writes: reclaim disk space
             db.compact()
+        self.vault.root()  # Folio's own storage folder is the only place it indexes
         self.workers.start()
         if self.settings.watch:
             self.watcher.start()
@@ -143,12 +146,14 @@ def build_container(settings: Settings, providers: Providers | None = None,
         bus.publish({"type": "voice"})
         return f"{stt.model_id} ready; {n} audio/video file(s) queued"
 
+    vault = Vault(ingestion)
     workers = WorkerPool(queue, {
+        "vault_import": vault.import_job,
         "scan_root": ingestion.scan_root_job,
         "index_source": ingestion.index_source,
         "extract_source": extraction.extract_source,
         "download_speech_model": download_speech_model,
-    }, size=settings.workers)
+    }, size=settings.workers, scan_kinds=("scan_root", "vault_import"))
 
     return Container(
         settings=settings, kdb=kdb, index=index, bus=bus, ledger=ledger, queue=queue,
@@ -156,4 +161,5 @@ def build_container(settings: Settings, providers: Providers | None = None,
         learning=learning, ingestion=ingestion, extraction=extraction, labels=labels, search=search,
         cards=EntityCards(kdb, search), views=Views(kdb), review=ReviewQueue(kdb, index),
         exporter=Exporter(kdb, bus), workers=workers, watcher=FolderWatcher(ingestion), drive=DriveService(secrets),
+        vault=vault,
     )

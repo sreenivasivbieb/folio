@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from .. import __version__
 from ..container import Container
 from ..domain.errors import Conflict, InvalidInput, NotFound, PrivacyBlocked, Unavailable
-from .routes import data, drive, knowledge, labels, ledger, sources, system, views
+from .routes import data, drive, knowledge, labels, ledger, sources, system, vault, views
 from .security import ErrorBoundaryMiddleware, TokenAuthMiddleware
 
 ERROR_STATUS = {NotFound: 404, Conflict: 409, InvalidInput: 422, PrivacyBlocked: 403, Unavailable: 503}
@@ -37,7 +37,7 @@ def create_app(container: Container, token: str, start_background: bool = True) 
             return JSONResponse({"detail": str(exc)}, status_code=status)
         app.add_exception_handler(exc_type, handler)
 
-    for module in (system, sources, knowledge, views, labels, ledger, data, drive):
+    for module in (system, sources, knowledge, views, labels, ledger, data, drive, vault):
         app.include_router(module.router, prefix="/api")
 
     # Added last = outermost: CORS answers preflights before the token check runs, and the
