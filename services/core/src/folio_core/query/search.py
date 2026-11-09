@@ -83,7 +83,7 @@ class HybridSearch:
 
         def add(source_id: str | None, via: str) -> None:
             if source_id and source_id not in found:
-                found[source_id] = {"source_id": source_id, "via": via}
+                found[source_id] = {"source_id": source_id, "via": via or "related entity"}
 
         # 1. Linked through the knowledge graph: "this file is about <topic>".
         ent_ids = [e.id for e in entities]
@@ -98,7 +98,7 @@ class HybridSearch:
                                               "status": {"$ne": "rejected"}}):
                 files_of.setdefault(c["subject_id"], []).append(c["value"])
             for c in claims:
-                hit = names.get(c["subject_id"]) or names.get(c.get("object_id"))
+                hit = names.get(c["subject_id"]) or names.get(c.get("object_id")) or "related entity"
                 if c["predicate"] == REPRESENTED_BY:
                     add(c.get("value"), hit)
                 for other in (c["subject_id"], c.get("object_id")):

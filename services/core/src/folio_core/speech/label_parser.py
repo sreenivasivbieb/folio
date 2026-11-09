@@ -266,10 +266,13 @@ class _Plan:
                 raise InvalidInput("select at least two entities to merge")
             self.ops.append({"op": "merge", "entity_ids": list(self.ctx.target_ids)})
             return True
-        m = re.fullmatch(r"merge (?P<a>.+?) (?:and|with|into) (?P<b>.+)", o, re.I)
+        m = re.fullmatch(r"merge (?P<a>.+?) (?P<how>and|with|into) (?P<b>.+)", o, re.I)
         if m:
             a, b = self.ref(m["a"]), self.ref(m["b"])
-            self.ops.append({"op": "merge_refs", "refs": [b, a]})  # keep the second-named
+            # The first ref survives. "merge A into B" keeps B; "merge A and/with B" keeps A,
+            # like merging a multi-selection in the UI (the first selected entity is kept).
+            keep_second = m["how"].lower() == "into"
+            self.ops.append({"op": "merge_refs", "refs": [b, a] if keep_second else [a, b]})
             return True
         return False
 

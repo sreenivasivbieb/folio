@@ -192,8 +192,12 @@ class Collection:
     def __init__(self, store: KnowledgeDB, name: str) -> None:
         self.store, self.name = store, name
 
-    def find(self, query=None, projection=None, **kwargs) -> Cursor:  # type: ignore[no-untyped-def]
-        return Cursor(self, query or {}, projection)
+    def find(self, query=None, projection=None, *, limit: int = 0, skip: int = 0, sort=None,
+             **kwargs) -> Cursor:  # type: ignore[no-untyped-def]
+        cursor = Cursor(self, query or {}, projection)
+        if sort:
+            cursor.sort(sort)
+        return cursor.skip(skip).limit(limit)
 
     def find_one(self, query=None, projection=None, sort=None, **kwargs):  # type: ignore[no-untyped-def]
         cursor = self.find(query, projection)

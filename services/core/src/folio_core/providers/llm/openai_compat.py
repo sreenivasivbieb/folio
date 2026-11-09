@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from datetime import UTC
 from typing import Any
 from urllib.parse import urlparse
 
@@ -57,7 +58,7 @@ class OpenAICompatibleLLM:
                 delay *= 2
                 continue
             if resp.status_code in (429, 500, 502, 503, 504) and attempt < 3:
-                wait = float(resp.headers.get("retry-after", delay))
+                wait = retry_after(resp.headers.get("retry-after"), delay)
                 time.sleep(min(wait, 30))
                 delay *= 2
                 continue
@@ -127,3 +128,23 @@ class OpenAICompatibleLLM:
                                  {"type": "object", "properties": {"ok": {"type": "boolean"}}, "required": ["ok"]})
         json.loads(out)
         return out
+
+
+def retry_after(header: str | None, default: float) -> float:
+    """Seconds to wait from a Retry-After header: delay-seconds or an HTTP-date (RFC 9110)."""
+    if not header:
+        return default
+    try:
+        return max(0.0, float(header))
+    except ValueError:
+        pass
+    try:
+        from datetime import datetime
+        from email.utils import parsedate_to_datetime
+
+        when = parsedate_to_datetime(header)
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=UTC)
+        return max(0.0, (when - datetime.now(UTC)).total_seconds())
+    except (TypeError, ValueError, IndexError, OverflowError):
+        return default

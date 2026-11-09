@@ -119,6 +119,9 @@ def test_correction_rejects_original_and_blocks_its_pattern(container, files):
     fixed = repo.get_claim(conn, new_id)
     assert fixed.status == ClaimStatus.VERIFIED and fixed.subject_id == rahul.id
     assert fixed.extractor.kind == "user"
+    # The correction keeps the source passages the original fact was found in.
+    assert [(e.source_id, e.quote) for e in fixed.evidence] == [(e.source_id, e.quote) for e in owns.evidence]
+    assert fixed.evidence and {e.id for e in fixed.evidence}.isdisjoint({e.id for e in owns.evidence})
 
 
 def test_merge_suggestions_for_similar_names(container, tmp_path):

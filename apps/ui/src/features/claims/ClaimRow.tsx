@@ -45,7 +45,16 @@ export function ClaimRow({ claim, entities, showSubject = true, sources, selfId 
     const changes: Record<string, unknown> = {};
     if (claim.kind === "attribute" && draft !== valueText(claim)) changes.value = draft;
     if ((date || null) !== (claim.valid_from ?? null)) changes.valid_from = date || null;
-    if (Object.keys(changes).length) actions.editClaim.mutate({ id: claim.id, changes });
+    if (Object.keys(changes).length)
+      actions.editClaim.mutate({ id: claim.id, changes }, {
+        // Changing a value rejects this claim and creates a replacement: follow it.
+        onSuccess: (ref) => {
+          const next = ref?.claim_id;
+          const sel = ui.get().selection;
+          if (next && next !== claim.id && sel.kind === "claim" && sel.ids.includes(claim.id))
+            selectClaims(sel.ids.map((id) => (id === claim.id ? next : id)));
+        },
+      });
     setEditing(false);
   };
 

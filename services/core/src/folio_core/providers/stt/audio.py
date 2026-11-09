@@ -80,7 +80,8 @@ def decode_untrusted(src: Path, dst: Path, timeout_s: int, memory_mb: int) -> np
     else:
         cmd = [sys.executable, "-I", "-m", "folio_core.providers.stt.audio", str(src), str(dst), str(memory_mb)]
     keep = ("PATH", "HOME", "LANG", "LC_ALL", "SYSTEMROOT", "TMP", "TEMP", "TMPDIR")
-    env = {k: v for k, v in os.environ.items() if k in keep}
+    env = {k: v for k, v in os.environ.items() if k in keep} | {
+        k: "1" for k in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS")}
     flags = 0x08000000 if sys.platform == "win32" else 0  # CREATE_NO_WINDOW
     try:
         proc = subprocess.run(cmd, capture_output=True, timeout=timeout_s, env=env, creationflags=flags)
@@ -98,7 +99,11 @@ def child_main(argv: list[str]) -> int:
         import resource
 
         limit = memory_mb * 1024 * 1024
-        resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+        # RLIMIT_DATA (Linux >= 4.7 counts private writable memory incl. anonymous mmaps) caps
+        # what a parser can allocate. RLIMIT_AS also counted reserved-but-unused address space
+        # (glibc arenas, BLAS buffers, mapped libraries), which could crash the child at import.
+        limit_kind = getattr(resource, "RLIMIT_DATA", resource.RLIMIT_AS)
+        resource.setrlimit(limit_kind, (limit, limit))
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     np.save(dst, load_media(src))
     return 0

@@ -93,27 +93,40 @@ export function VoiceBar() {
     return () => window.clearTimeout(t);
   }, [selection, client]);
 
+  // Listeners are attached once; they call the latest start/stop through a ref. (Re-attaching on
+  // every render — 4x a second while recording — leaked Tauri listeners, because the async
+  // listen() resolved after the cleanup had already run, and fired push-to-talk repeatedly.)
+  const handlers = useRef({ start, stop });
+  handlers.current = { start, stop };
+
   // Global hotkey (Ctrl+Alt+Space) from the desktop shell: hold to talk even when unfocused.
   useEffect(() => {
     if (!inTauri) return;
     let unlisten: (() => void) | undefined;
+    let cancelled = false;
     void import("@tauri-apps/api/event").then(({ listen }) =>
-      listen<boolean>("folio://push-to-talk", (e) => (e.payload ? start() : void stop())).then((u) => {
-        unlisten = u;
+      listen<boolean>("folio://push-to-talk", (e) =>
+        e.payload ? handlers.current.start() : void handlers.current.stop(),
+      ).then((u) => {
+        if (cancelled) u(); // unmounted before listen() resolved
+        else unlisten = u;
       }),
     );
-    return () => unlisten?.();
-  });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.code === "Space" && !e.repeat) {
         e.preventDefault();
-        start();
+        handlers.current.start();
       }
     };
     const up = (e: KeyboardEvent) => {
-      if (e.code === "Space" || e.key === "Control") void stop();
+      if (e.code === "Space" || e.key === "Control") void handlers.current.stop();
     };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
@@ -121,7 +134,7 @@ export function VoiceBar() {
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
     };
-  });
+  }, []);
 
   return (
     <div className="voice">

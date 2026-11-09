@@ -325,6 +325,9 @@ class KnowledgeService:
                     valid_from=changes.get("valid_from", c.get("valid_from")),
                     valid_to=changes.get("valid_to", c.get("valid_to")),
                     status=ClaimStatus.VERIFIED, extractor=Extractor(kind="user"),
+                    # The correction still rests on the same source passages.
+                    evidence=[{k: v for k, v in e.items() if k not in ("id", "claim_id")}
+                              for e in c.get("evidence") or []],
                 )
                 return new_claim  # type: ignore[return-value]
             tx.update("claims", claim_id, {

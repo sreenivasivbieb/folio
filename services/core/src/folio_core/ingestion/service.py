@@ -13,6 +13,7 @@ Originals are opened read-only and never copied, moved or modified.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import logging
 import os
@@ -161,7 +162,7 @@ class IngestionService:
                         and not self._excluded(p, root) and p.is_file()):
                     if not os.access(p, os.R_OK):
                         if on_error:
-                            on_error(PermissionError(f"cannot read {p}"))
+                            on_error(PermissionError(errno.EACCES, "cannot read", str(p)))
                         continue
                     yield p
 
@@ -172,9 +173,16 @@ class IngestionService:
         unreadable = 0
         metadata = 0
 
+        blocked: list[Path] = []  # unreadable paths: files below them may only *look* deleted
+        blind = False  # an error without a path: we cannot tell where we could not look
+
         def failed(exc: OSError) -> None:
-            nonlocal unreadable
+            nonlocal unreadable, blind
             unreadable += 1
+            if exc.filename:
+                blocked.append(Path(exc.filename))
+            else:
+                blind = True
             log.warning("scan skipped an unreadable path: %s", exc)
 
         for f in self._iter_files(root, failed):
@@ -190,7 +198,10 @@ class IngestionService:
                 failed(exc)
         # Files that disappeared from a folder root are marked missing (their knowledge stays).
         for d in self.kdb["sources"].find({"root_id": root.id, "status": {"$nin": ["missing", "forgotten", "removed"]}}):
-            if not Path(d["path"]).exists() and not unreadable:
+            path = Path(d["path"])
+            if blind or any(path == b or b in path.parents for b in blocked):
+                continue  # we could not see there; absence proves nothing
+            if not path.exists():
                 repo.set_source_status(self.kdb, d["_id"], SourceStatus.MISSING)
                 self._changed(d["_id"])
         if job:
