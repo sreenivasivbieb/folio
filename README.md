@@ -1,73 +1,238 @@
 # Folio
 
-Local-first file scanning, voice labeling and knowledge organization for your own computer.
-Scan Home, mounted drives or any readable folder, review extracted facts, and follow every
-fact back to its original file. Originals stay where they are and are never modified.
+[![CI](https://github.com/sreenivasivbieb/folio/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/sreenivasivbieb/folio/actions/workflows/ci.yml)
 
-**Each user's files and working data remain on their own device.** Folio has no hosted
-storage, user account service or central database. Knowledge and the search index live in
-private local SQLite files. AI can be local or a hosted provider chosen with the user's
-own API key. Optional Google Drive backup uses that user's own Desktop OAuth credentials;
-it uploads a knowledge backup only when the user chooses **Back up now**.
+**Turn files on your computer into searchable, connected knowledge.**
+
+Folio is a desktop file organizer for Omarchy Linux. Scan folders and mounted drives,
+search document passages, review extracted people and facts, and explore their
+connections in graph, table, timeline and swimlane views. Every extracted fact keeps
+its supporting source evidence.
+
+Your originals stay in place. Folio stores its knowledge and search index in private
+local files on your machine. Choose offline processing, a local AI model, or a cloud
+AI provider with your own API key. Optional Google Drive backup uses your own Google
+account and OAuth credentials.
+
+[Install](#install-on-omarchy) · [First scan](#your-first-scan) ·
+[Storage](#your-data-and-privacy) · [AI](#choose-your-ai) ·
+[Google Drive](#optional-google-drive-backup) · [Development](#development)
+
+## What you can do
+
+- **Scan your computer:** select Home, mounted drives, the readable filesystem, or
+  custom folders. Background jobs report progress and individual file errors.
+- **Search with evidence:** find indexed passages and trace them to source files,
+  document pages, text lines or media timestamps.
+- **Review extracted knowledge:** edit, verify or reject proposed facts, with history
+  and undo/redo. Explore connections in graph, table, timeline and swimlane views.
+- **Add voice labels:** transcribe speech locally with an explicitly downloaded
+  Whisper model, then review the proposed changes.
+- **Keep portable backups:** export JSON, GraphML, Markdown or CSV, and restore Folio
+  JSON backups into an empty project.
 
 ## Install on Omarchy
 
-See [installation and storage](docs/INSTALL.md). Build a native Arch package and portable
-archive with `bash scripts/build-omarchy.sh`; outputs and SHA256 checksums are in
-`artifacts/`. The installed app includes the frontend and Python service and runs from
-any folder. It does not need Node, uv, Rust, Docker, MongoDB or this checkout on the target
-machine. The Arch package declares its GTK/WebKit and audio runtime dependencies.
+The current package target is **Omarchy / Arch Linux, x86_64**, version **0.2.0**.
+GitHub release assets have not been published yet. Build the installer from this
+repository, or install a package produced by the build below.
 
-Open Folio from `Super+Space`, choose **Scan my computer**, and select locations. Supported
-formats get content indexing; every other regular readable file gets a metadata entry.
-Hidden folders, exclusion patterns and watching are configurable. Scans stream files in
-background jobs and report unreadable paths without aborting the rest. Symlinks, virtual
-system paths and Folio's own storage are skipped. No personal-file scan runs on install.
+### Build the installer
+
+The build machine needs these tools and libraries:
+
+| Requirement | Used for |
+| --- | --- |
+| Git, Node.js 22.12+ and npm | Source checkout and React interface |
+| [uv](https://docs.astral.sh/uv/) and Python 3.12 | Python core and bundled service |
+| Stable Rust and Cargo | Tauri desktop shell |
+| Arch `base-devel` and `zstd` | Native compilation and package creation |
+| `webkit2gtk-4.1`, `gtk3`, `openssl`, `portaudio`, `xdg-utils` | Desktop, audio and system-browser integration |
+
+See the [Tauri Linux prerequisites](https://v2.tauri.app/start/prerequisites/) for
+system dependency setup. Python 3.12 is selected by the core project's configuration.
+
+```bash
+git clone https://github.com/sreenivasivbieb/folio.git
+cd folio
+npm ci
+uv sync --project services/core
+bash scripts/build-omarchy.sh
+```
+
+The build writes these files to `artifacts/`:
+
+| File | Purpose |
+| --- | --- |
+| `folio-0.2.0-1-x86_64.pkg.tar.zst` | Arch package with launcher entry and runtime dependencies |
+| `folio-omarchy-x86_64.tar.zst` | Portable desktop app and bundled core service |
+| `SHA256SUMS` | Checksums for both artifacts |
+
+### Install and launch
+
+From the `artifacts/` folder:
+
+```bash
+sha256sum --check SHA256SUMS
+sudo pacman -U ./folio-0.2.0-1-x86_64.pkg.tar.zst
+folio
+```
+
+You can also open **Folio** from the Omarchy launcher with `Super+Space`.
+The installed package includes the interface and Python service. Development tools
+and a source checkout are only needed to build it. MongoDB and Docker are not required.
+
+For a portable run, extract the archive and keep its two executables together:
+
+```bash
+tar --zstd -xf folio-omarchy-x86_64.tar.zst
+./folio-omarchy/folio
+```
+
+The portable app needs the same runtime libraries as the Arch package. See
+[installation details](docs/INSTALL.md) for storage, removal and migration notes.
+
+## Your first scan
+
+1. Open Folio and choose **Scan my computer**.
+2. Select Home, a mounted drive, the readable filesystem, or a custom path.
+3. Choose hidden-file, exclusion and folder-watching settings, then start the scan.
+4. Open **Activity** to follow indexing progress and inspect failed jobs.
+5. Search your files and review extracted claims before marking them verified.
+
+Scanning reads originals in place. It does not copy, move or modify them. Installation
+starts no personal-file scan; selected folders are rescanned on later app launches.
+
+Folio inventories readable regular files in your selected locations. Supported formats
+get content indexing; other formats appear as **Metadata only**. Symlinks, unreadable
+paths, virtual system directories and Folio's own data folder are skipped. Hidden
+folders and common cache, dependency and credential directories are excluded by default.
+You can adjust exclusions in the scan dialog.
+
+### Supported content
+
+| File family | Extensions | Processing |
+| --- | --- | --- |
+| Text and Markdown | `.txt`, `.md`, `.markdown` | Text extraction with line references |
+| PDF | `.pdf` | Text extraction; scanned pages use optional Tesseract OCR |
+| Word | `.docx` | Document text extraction |
+| Subtitles | `.srt`, `.vtt` | Text with timestamps |
+| Images | `.png`, `.jpg`, `.jpeg`, `.webp`, `.tif`, `.tiff`, `.bmp`, `.gif` | Optional OCR; basic image details when text is unavailable |
+| Audio | `.mp3`, `.wav`, `.m4a`, `.ogg`, `.oga`, `.opus`, `.flac`, `.aac` | Local transcription with timestamps |
+| Video | `.mp4`, `.mkv`, `.mov`, `.webm`, `.avi`, `.m4v` | Local transcription of the audio track |
+
+OCR requires Tesseract with English language data. Audio/video indexing requires
+`ffmpeg` and a downloaded speech model. The Omarchy build bundles speech support;
+download its model in **Settings → Voice** when you want to use it.
+
+## Your data and privacy
+
+**Folio has no developer-operated storage service, shared database or required Folio
+account.** Each operating-system user has their own local app data.
+
+On Linux, the default folder is `~/.local/share/folio/`, or `$XDG_DATA_HOME/folio/`
+when `XDG_DATA_HOME` is set:
+
+| Local file or folder | Contents |
+| --- | --- |
+| `knowledge.sqlite3` | Sources, entities, claims, settings and undo history |
+| `index.db` | Rebuildable parsed content, search index, vectors, jobs and model cache |
+| `secrets.json` | Your AI API keys and optional Google OAuth credentials/tokens |
+| `labels/` | Locally recorded voice-label audio |
+| `logs/core.log` | Rotating startup and runtime logs |
+
+Set `FOLIO_DATA_DIR` before launching to choose another local storage folder. The
+Linux app data folder uses private permissions (`0700`); credentials use `0600`.
+These are local SQLite files, with no database server to start or administer.
+
+You control the connections that can send data elsewhere:
+
+| Choice | Data handling |
+| --- | --- |
+| Default offline processing | Rule-based extraction and search run on this device |
+| Local AI endpoint | Document text goes to the local model server you configure |
+| Hosted AI provider | Document text is sent to your chosen provider for processing using your key |
+| Google Drive **Back up now** | A knowledge backup is uploaded to your Google account |
+
+Credentials are excluded from knowledge exports and Drive backups. Backups can contain
+document excerpts, source paths and history, so choose their destination accordingly.
+Removing the app retains your originals and local app data.
+
+## Choose your AI
+
+Folio works without an AI account using offline pattern matching. This baseline finds
+simple patterns; richer extraction needs a model you connect yourself.
+
+In **Settings → AI model**:
+
+1. Choose **Ollama** for a model running on this computer, or a custom local
+   OpenAI-compatible endpoint. Start your local model server separately.
+2. Alternatively, choose a hosted preset such as OpenRouter, OpenAI, Qwen or Groq,
+   or enter a custom compatible URL, and supply your own API key.
+3. Use **Load models**, select an available model, and **Save**.
+4. Use **Test** to check the connection, then **Extract all files now** to process
+   existing files with the selected model.
+
+Saving a hosted endpoint enables cloud processing for the project. The top bar shows
+**Local AI** or **Cloud AI**. Disable cloud processing in **Settings → Privacy**.
+Working knowledge remains in your local Folio files with either choice.
+
+## Optional Google Drive backup
+
+Drive integration backs up and restores your Folio knowledge using **your own Google
+Cloud project, OAuth client and Google account**.
+
+1. In your Google Cloud project, enable the Drive API and create an OAuth client
+   with application type **Desktop app**. Follow
+   [Google's Desktop OAuth setup](https://developers.google.com/identity/protocols/oauth2/native-app).
+2. Download that client's credentials JSON.
+3. Open **Settings → Google Drive** and import the JSON.
+4. Choose **Prepare Google sign-in**, then **Continue in system browser**, and
+   authorize with your Google account.
+5. Choose **Back up now** whenever you want to save a backup.
+
+Folio uses a local callback, PKCE and Google's `drive.file` scope for its backups;
+see [Google's scope documentation](https://developers.google.com/workspace/drive/api/guides/api-specific-auth).
+Uploads are manual. A backup includes knowledge, evidence quotes, local source paths,
+settings and history. Original documents, recorded audio, API keys and OAuth tokens
+are excluded.
+
+Use the same OAuth client on another device to access its backups. **Restore locally**
+requires an empty local project; source documents must be available separately to
+reopen or rescan them. **Disconnect locally** removes this device's Drive credentials.
+Google account permissions can also be revoked in your Google account.
+
+For a local backup, use **Settings → Data** to export JSON and restore it into an empty
+project. Older Folio JSON exports are supported; existing MongoDB Docker volumes are
+left untouched and are not automatically migrated.
 
 ## Development
 
-Prerequisites: Node 20.19+, uv (Python 3.12), and for the desktop shell Rust plus the
-[Tauri Linux prerequisites](https://tauri.app/start/prerequisites/).
+With Node.js 22.12+, npm and uv installed, run these commands from the repository root:
 
 ```bash
-npm install
+npm ci
 uv sync --project services/core
 npm run dev
 ```
 
-Open http://127.0.0.1:1420. This starts the local backend and UI together; Ctrl+C stops
-both. Separate commands are still available as `npm run dev:core` and `npm run dev:ui`.
-For the desktop shell use `npm run dev:desktop` instead. No database server is required.
+Open **http://127.0.0.1:1420**. This starts the backend and interface together;
+`Ctrl+C` stops both. Separate commands are `npm run dev:core` and `npm run dev:ui`.
+Native desktop development also needs Rust and the Tauri system libraries:
 
-## Storage and connections
+```bash
+npm run dev:desktop
+```
 
-* `~/.local/share/folio/knowledge.sqlite3`: your entities, claims, sources and undo history.
-* `~/.local/share/folio/index.db`: rebuildable chunks, search vectors, jobs and model cache.
-* `~/.local/share/folio/logs/core.log`: rotating startup and runtime logs.
-* `~/.local/share/folio/secrets.json`: your API keys and optional Google OAuth credentials,
-  readable only by you. Credentials are excluded from knowledge exports and Drive backups.
-
-`FOLIO_DATA_DIR` selects a different local storage folder. Each OS user gets their own
-storage. Removing the application does not delete user files, app data or backups.
-
-In **Settings → AI model**, choose Ollama/local OpenAI-compatible inference or a hosted
-provider using your own key. A hosted AI connection processes selected file text remotely;
-it does not change where Folio stores its working data. Local AI is the default. Speech
-models download only after an explicit action in **Settings → Voice**:
+For speech support in a development environment:
 
 ```bash
 uv sync --project services/core --extra speech
 ```
 
-In **Settings → Google Drive**, import your own Google Desktop OAuth credentials JSON and
-sign in using the system browser. Follow [Google's Desktop OAuth setup](https://developers.google.com/identity/protocols/oauth2/native-app)
-and enable the Drive API in that Google Cloud project. Folio requests only `drive.file`
-access for its own backups. Backup/restore is explicit, uses no Folio relay, and keeps
-original files and credentials local. Use the same OAuth app to access its backups on
-another device. A restore needs an empty local project. Live OAuth still needs validation
-with the user's own credentials; automated tests use Google's API shapes with test doubles.
+Then download the speech model explicitly in **Settings → Voice**.
 
-## Checks
+### Checks
 
 ```bash
 npm run test:core
@@ -78,18 +243,37 @@ npm run build:ui
 npm run eval
 ```
 
-Tests create temporary local storage and do not require Docker or a remote database.
-`npm run gen:client` regenerates the API client after endpoint changes. The rule-based
-extraction quality gate uses small fixtures and is not a measure of live model quality.
+After changing API endpoints, regenerate the typed client with `npm run gen:client`.
+Tests use temporary local storage. The extraction quality gate uses small fixtures;
+it measures the rule extractor on those fixtures, rather than live AI model quality.
 
-## Structure
+### Repository layout
 
-* `apps/ui`: React + TypeScript interface, graph/swimlane/timeline/table views, file inventory.
-* `apps/desktop`: Tauri 2 shell, native dialogs, atomic exports and Python sidecar supervision.
-* `services/core`: local file ingestion, SQLite persistence, ledger, AI routing and optional Drive.
-* `packages/api-client`: generated OpenAPI types and typed HTTP client.
-* `pkgbuild` and `scripts/build-omarchy.sh`: reproducible local Omarchy/Arch packaging.
-* `docs/architecture.md`: current data flow and implementation limits.
+| Path | Purpose |
+| --- | --- |
+| [`apps/ui`](apps/ui) | React and TypeScript interface |
+| [`apps/desktop`](apps/desktop) | Tauri shell, native dialogs and core supervision |
+| [`services/core`](services/core) | Python ingestion, local persistence, search, ledger and providers |
+| [`packages/api-client`](packages/api-client) | Generated OpenAPI types and typed HTTP client |
+| [`pkgbuild`](pkgbuild) | Arch package metadata and desktop entry |
+| [`scripts/build-omarchy.sh`](scripts/build-omarchy.sh) | Omarchy package and portable archive builder |
+| [`docs/architecture.md`](docs/architecture.md) | Data flow, persistence and implementation boundaries |
+| [`docs/adr`](docs/adr) | Architecture decisions, including the local-storage migration |
 
-The Omarchy package is the supported build target for this change. Other platform release
-workflows remain in the repository but have not been validated by the Omarchy build.
+## Troubleshooting and current limits
+
+| Symptom | Where to look |
+| --- | --- |
+| Core service fails to start | Inspect `logs/core.log` in your data folder; check whether another Folio instance is using that folder |
+| Some files are absent from a scan | Check location permissions, hidden-file settings, exclusions and Activity errors |
+| A file says **Metadata only** | Its format has no content parser; its path and metadata are still inventoried |
+| Images or scanned PDFs have no extracted text | Check Tesseract and its English language data |
+| Audio/video indexing fails | Check `ffmpeg`, the speech-model download and the failed job in Activity |
+| AI connection fails | Check the local server or hosted provider URL, model and your API key; use **Test** |
+| Drive restore is unavailable | Restore into an empty project using the OAuth client that created the backup |
+
+The Omarchy x86_64 package has been built and checked with generated sample files,
+including scanning and persistence after restart. Live Google sign-in, real-provider
+AI behavior, whole-computer scan performance and native Wayland interaction still need
+validation on target installations. CI builds the desktop shell on Linux, macOS and
+Windows; those builds alone do not establish installer or runtime support for every OS.
