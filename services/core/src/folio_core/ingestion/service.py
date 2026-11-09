@@ -367,7 +367,8 @@ class IngestionService:
         if found is None:
             raise InvalidInput(f"unsupported file type {path.suffix}")
         parser, _kind = found
-        if parser.sandboxed:
+        small = path.stat().st_size <= getattr(parser, "inprocess_max_bytes", -1)
+        if parser.sandboxed and not small:
             self.queue.progress(job.id, 0.1, "parsing")
             return run_sandboxed(parser.name, path, self.settings.parse_timeout_s, self.settings.parse_memory_mb)
         return parser.parse(path, ParseContext(

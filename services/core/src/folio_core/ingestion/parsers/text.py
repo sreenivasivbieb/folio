@@ -42,6 +42,9 @@ class TextParser:
         ".markdown": SourceKind.MARKDOWN,
     }
     sandboxed = True
+    # Plain-text reading has no native code: small files parse in-process. Launching a sandbox
+    # child costs ~2 s in the packaged app, which made a few thousand notes take an hour.
+    inprocess_max_bytes = 8 << 20
 
     def parse(self, path: Path, ctx: ParseContext) -> list[ParsedUnit]:
         return paragraphs_with_lines(read_text(path))
