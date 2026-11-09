@@ -13,7 +13,7 @@ export type Selection =
   | { kind: "source"; id: string };
 
 export type ViewName = "graph" | "swimlane" | "timeline" | "table";
-export type LeftTab = "sources" | "review" | "activity";
+export type LeftTab = "sources" | "review" | "activity" | "trash";
 export type SettingsTab = "ai" | "voice" | "privacy" | "hints" | "data" | "drive" | "appearance";
 
 interface UiState {
@@ -25,7 +25,9 @@ interface UiState {
   openSourceId: string | null; // a whole file opened from the sources list
   label: Label | null; // label preview awaiting confirmation
   recording: boolean;
-  modal: "none" | "search" | "settings" | "scan";
+  modal: "none" | "search" | "settings" | "add" | "export";
+  pendingPaths: string[]; // files/folders picked or dropped, waiting for "Add to Folio"
+  exportId: string | null; // the stored file being exported
   settingsTab: SettingsTab;
 }
 
@@ -39,6 +41,8 @@ export const ui = createStore<UiState>({
   label: null,
   recording: false,
   modal: "none",
+  pendingPaths: [],
+  exportId: null,
   settingsTab: "ai",
 });
 
@@ -84,4 +88,9 @@ export function labelTarget(sel: Selection): { target_kind: "source" | "entity" 
     default:
       return { target_kind: "none", target_ids: [] };
   }
+}
+
+/** Open the "Add to Folio" dialog, optionally with files already chosen (e.g. dropped on the window). */
+export function openAdd(paths: string[] = []) {
+  ui.set({ modal: "add", pendingPaths: paths });
 }

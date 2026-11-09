@@ -308,3 +308,32 @@ export function useLabelActions(onLabel: (l: Label | null) => void) {
 }
 
 export type { Claim };
+
+// --- vault: files dumped into Folio's own storage ---------------------------------------------
+
+export function useVault() {
+  const { client } = useApi();
+  return useQuery({ queryKey: ["vault"], queryFn: async () => unwrap(await client.GET("/api/vault")) });
+}
+
+export function useTrash() {
+  const { client } = useApi();
+  return useQuery({ queryKey: ["trash"], queryFn: async () => unwrap(await client.GET("/api/vault/trash")) });
+}
+
+export function useVaultActions() {
+  const { client } = useApi();
+  const id = (source_id: string) => ({ params: { path: { source_id } } });
+  return {
+    add: useAction(async (a: { paths: string[]; mode: "move" | "copy" }) =>
+      unwrap(await client.POST("/api/vault/import", { body: a }))),
+    trash: useAction(async (sid: string) => unwrap(await client.POST("/api/vault/{source_id}/trash", id(sid))),
+      "Moved to Folio's trash"),
+    restore: useAction(async (sid: string) => unwrap(await client.POST("/api/vault/{source_id}/restore", id(sid))), "Restored"),
+    remove: useAction(async (sid: string) => unwrap(await client.DELETE("/api/vault/{source_id}", id(sid))),
+      "Deleted permanently"),
+    empty: useAction(async () => unwrap(await client.POST("/api/vault/trash/empty")), "Trash emptied"),
+    exportFile: useAction(async (a: { id: string; mode: "move" | "copy"; dest_dir: string | null }) =>
+      unwrap(await client.POST("/api/vault/{source_id}/export", { ...id(a.id), body: { mode: a.mode, dest_dir: a.dest_dir } }))),
+  };
+}

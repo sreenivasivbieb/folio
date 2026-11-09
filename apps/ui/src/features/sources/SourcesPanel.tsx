@@ -1,30 +1,11 @@
-/** Library: selected files/folders and their index status. Nothing is copied or moved (FR-1). */
+/** Library: the files dumped into Folio's own storage, with their index status. */
 import type { Source } from "@folio/api-client";
 import { useState } from "react";
 import { unwrap, useApi } from "@/api/client";
-import { inTauri } from "@/api/connection";
-import { useAction, useFilePage, useJobs, useRoots } from "@/api/queries";
+import { useAction, useFilePage, useJobs, useVault, useVaultActions } from "@/api/queries";
 import { Icon, kindIcon } from "@/components/Icon";
 import { basename, fileSize } from "@/lib/format";
-import { selectSource, ui } from "@/state/selection";
-
-async function pickPath(directory: boolean): Promise<string | null> {
-  if (inTauri) {
-    const { open } = await import("@tauri-apps/plugin-dialog");
-    const res = await open({ directory, multiple: false });
-    return typeof res === "string" ? res : null;
-  }
-  return window.prompt(directory ? "Folder path to add (read-only)" : "File path to add (read-only)");
-}
-
-export function useAddRoot() {
-  const { client } = useApi();
-  return useAction(async (directory: boolean) => {
-    const path = await pickPath(directory);
-    if (!path) return null;
-    return unwrap(await client.POST("/api/roots", { body: { path, watch: true, include_hidden: false } }));
-  }, "Added — indexing in the background");
-}
+import { openAdd, selectSource, ui } from "@/state/selection";
 
 function statusLine(s: Source, progress?: { p: number; m: string | null }): string {
   if (s.status === "indexing" && progress) return progress.m ?? `${Math.round(progress.p * 100)}%`;
@@ -36,20 +17,15 @@ function statusLine(s: Source, progress?: { p: number; m: string | null }): stri
 
 export function SourcesPanel() {
   const { client } = useApi();
-  const { data: roots } = useRoots();
+  const { data: vault } = useVault();
+  const vaultActions = useVaultActions();
   const { data: jobs } = useJobs();
   const [filter, setFilter] = useState("");
   const [offset, setOffset] = useState(0);
   const { data: page, isPending, error, refetch } = useFilePage(filter, offset);
   const sources = page?.sources;
   const active = ui.use((s) => (s.selection.kind === "source" ? s.selection.id : null));
-  const addRoot = useAddRoot();
-  const removeRoot = useAction(async (id: string) => unwrap(await client.DELETE("/api/roots/{root_id}", { params: { path: { root_id: id } } })), "Folder removed — its knowledge is kept");
   const reindex = useAction(async (id: string) => unwrap(await client.POST("/api/sources/{source_id}/reindex", { params: { path: { source_id: id } } })), "Re-indexing");
-  const forget = useAction(async (id: string) => {
-    if (!window.confirm("Forget this file? Its passages and unverified facts are removed. Verified facts that relied only on it are flagged for review.")) return null;
-    return unwrap(await client.POST("/api/sources/{source_id}/forget", { params: { path: { source_id: id } } }));
-  }, "Forgotten");
 
   const running = new Map((jobs ?? []).filter((j) => j.status === "running" && j.kind === "index_source")
     .map((j) => [String(j.payload.source_id), { p: j.progress, m: j.message }]));
@@ -57,21 +33,14 @@ export function SourcesPanel() {
 
   return (
     <>
-      <div style={{ padding: "10px 12px" }}><button type="button" className="btn primary" style={{ width: "100%" }} onClick={() => ui.set({ modal: "scan" })}><Icon name="search" /> Scan my computer</button></div>
-      <div className="sidebar-head">
-        <h2>Folders</h2>
-        <button type="button" className="btn sm" onClick={() => addRoot.mutate(true)} title="Add a folder"><Icon name="folder" size={13} /> Add</button>
-        <button type="button" className="btn sm icon-only" onClick={() => addRoot.mutate(false)} title="Add a single file"><Icon name="plus" size={13} /></button>
-      </div>
-      {(roots ?? []).map((r) => (
-        <div key={r.id} className="list-row" style={{ cursor: "default", minHeight: 30 }}>
-          <Icon name={r.kind === "folder" ? "folder" : "file"} size={14} className="muted" />
-          <span className="ellipsis grow small" title={r.path}>{basename(r.path)}</span>
-          <div className="row-actions" style={{ opacity: 1 }}>
-            <button type="button" className="btn ghost sm icon-only" title="Stop tracking (knowledge is kept)" onClick={() => removeRoot.mutate(r.id)}><Icon name="x" size={13} /></button>
+      <div style={{ padding: "12px 12px 4px" }}>
+        <button type="button" className="btn primary" style={{ width: "100%" }} onClick={() => openAdd()}><Icon name="plus" /> Add to Folio</button>
+        {vault && (
+          <div className="vault-meta" title={vault.path}>
+            <Icon name="database" size={12} /> {vault.files} file{vault.files === 1 ? "" : "s"} · {fileSize(vault.bytes)} stored in Folio
           </div>
-        </div>
-      ))}
+        )}
+      </div>
       <div className="sidebar-head" style={{ paddingTop: 14 }}>
         <h2>Files</h2>
         <span className="tiny muted">{page?.total ?? 0}</span>
@@ -84,7 +53,7 @@ export function SourcesPanel() {
       <div className="scroll">
         {isPending && <p role="status" className="empty-inline">Loading files…</p>}
         {error && <div role="alert" className="empty-inline">Could not load files. <button type="button" className="btn sm" onClick={() => void refetch()}>Retry</button></div>}
-        {!isPending && !error && !sources?.length && <div className="empty-inline">{filter ? "No files match this search." : "Add a folder or scan your computer to begin."}</div>}
+        {!isPending && !error && !sources?.length && <div className="empty-inline">{filter ? "No files match this search." : "Nothing here yet. Add files, or drop them onto the window."}</div>}
         {shown.map((s) => (
           <div key={s.id} className={`list-row ${active === s.id ? "active" : ""}`} onClick={() => selectSource(s.id)} title={s.error ?? s.path}>
             <div className="file-icon"><Icon name={kindIcon(s.kind)} size={14} /></div>
@@ -99,7 +68,8 @@ export function SourcesPanel() {
             {s.status === "indexing" && <Icon name="loader" size={14} spin className="muted" />}
             <div className="row-actions">
               {s.kind !== "other" && <button type="button" className="btn ghost sm icon-only" title="Re-index" onClick={(e) => { e.stopPropagation(); reindex.mutate(s.id); }}><Icon name="refresh" size={13} /></button>}
-              <button type="button" className="btn ghost sm icon-only danger" title="Forget this file" onClick={(e) => { e.stopPropagation(); forget.mutate(s.id); }}><Icon name="trash" size={13} /></button>
+              <button type="button" className="btn ghost sm icon-only" title="Export to a folder" onClick={(e) => { e.stopPropagation(); ui.set({ modal: "export", exportId: s.id }); }}><Icon name="external" size={13} /></button>
+              <button type="button" className="btn ghost sm icon-only danger" title="Move to trash" onClick={(e) => { e.stopPropagation(); vaultActions.trash.mutate(s.id); }}><Icon name="trash" size={13} /></button>
             </div>
           </div>
         ))}

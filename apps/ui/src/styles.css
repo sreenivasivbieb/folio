@@ -367,3 +367,85 @@ mark { background: rgb(255 214 0 / 40%); color: inherit; padding: 0 2px; border-
 .toast { display: flex; align-items: center; gap: 8px; background: var(--primary); color: var(--primary-text); padding: 9px 16px; border-radius: 999px; box-shadow: var(--shadow-lg); animation: fade-in 0.18s ease-out; font-weight: 500; }
 .toast.error { background: var(--bad); color: white; }
 textarea.schema { width: 100%; min-height: 46vh; font-family: var(--mono); font-size: 12px; }
+
+/* ============================================================================================
+   Reference look: a soft gray canvas, light large headings with one bold word, content in
+   gray "card" containers holding white panels, two-part pill tags, generous spacing.
+   ============================================================================================ */
+:root { --canvas: #f4f4f7; --card: #f8f8fb; --hairline: #ececf2; }
+:root[data-theme="dark"] { --canvas: #0b0b10; --card: #15151c; --hairline: #22222b; }
+
+.app { background: var(--canvas); }
+.topbar { background: color-mix(in srgb, var(--surface) 90%, transparent); backdrop-filter: blur(12px); }
+.sidebar, .inspector { background: var(--surface); }
+.main { background: radial-gradient(55% 45% at 0% 0%, var(--glow-a), transparent 70%),
+                    radial-gradient(50% 40% at 100% 100%, var(--glow-b), transparent 70%), var(--canvas); }
+.viewbar, .toolbar { background: transparent; backdrop-filter: none; border-bottom: 0; padding-left: 16px; padding-right: 16px; }
+
+/* the active view sits in a white card on the canvas, like the reference's feature cards */
+.main > .view, .main > .scroll {
+  margin: 4px 14px 12px; border: 1px solid var(--hairline); border-radius: var(--radius-lg);
+  background: var(--surface); box-shadow: 0 1px 2px rgb(16 16 40 / 3%), 0 12px 32px rgb(16 16 40 / 5%); overflow: hidden;
+}
+.main > .scroll { overflow: auto; }
+.main > .view .view { margin: 0; border: 0; box-shadow: none; border-radius: 0; }
+.banner { margin: 6px 14px 10px; border-radius: var(--radius-lg); padding: 16px 18px;
+  background: linear-gradient(115deg, rgb(196 181 253 / 22%), var(--surface) 48%, rgb(254 215 190 / 30%)); border-color: var(--hairline); }
+:root[data-theme="dark"] .banner { background: linear-gradient(115deg, var(--violet-soft), var(--surface) 50%, var(--pink-soft)); }
+.banner b { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+
+/* headings: light with a bold accent word */
+.empty-state h3 { font-size: 26px; font-weight: 350; letter-spacing: -0.035em; line-height: 1.15; }
+.empty-state h3 b { font-weight: 650; }
+.empty-state p { color: var(--text-2); font-size: 13.5px; max-width: 460px; }
+.empty-state .glyph { border-radius: 16px; box-shadow: 0 0 0 1px var(--hairline), var(--shadow-sm); }
+.entity-title { font-size: 22px; font-weight: 600; letter-spacing: -0.03em; }
+.settings-body h2 { font-size: 20px; font-weight: 400; letter-spacing: -0.03em; }
+.modal header { font-size: 15px; font-weight: 500; }
+.sidebar-head h2, .insp-section h3, .palette-group > .label { font-weight: 600; letter-spacing: 0.06em; font-size: 10.5px; }
+
+/* two-part pill: [Features] Built for real work → */
+.tag-pill { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 3px; border-radius: 999px;
+  border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-2); font-size: 12px; box-shadow: var(--shadow-sm); margin-bottom: 6px; }
+.tag-pill b { display: inline-flex; align-items: center; height: 22px; padding: 0 10px; border-radius: 999px;
+  background: var(--primary); color: var(--primary-text); font-weight: 600; font-size: 11.5px; }
+.tag-pill::after { content: "→"; color: var(--text-3); }
+
+/* inspector sections: gray container card, white content inside */
+.insp-section { margin: 12px 14px; padding: 14px; border: 1px solid var(--hairline); border-radius: var(--radius-lg); background: var(--card); }
+.insp-section .claim, .insp-section .file-chip, .insp-section .passage { background: var(--surface); border-color: var(--hairline); }
+.insp-head { border-bottom: 0; padding-bottom: 4px; }
+.stat { background: var(--surface); }
+
+/* sidebar: status cards like the reference plan cards */
+.status-card { border-color: var(--hairline); border-radius: 14px; padding: 11px 12px; }
+.status-dot { width: 9px; height: 9px; }
+.vault-meta { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 11.5px; color: var(--text-3); padding: 0 2px; }
+
+/* ---- add / export dialogs ------------------------------------------------------------------ */
+.dropzone { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 22px 16px; border-radius: var(--radius-lg);
+  border: 1.5px dashed var(--border-strong); background: linear-gradient(135deg, var(--violet-soft), var(--surface) 55%, var(--glow-b));
+  color: var(--text-2); text-align: center; }
+.dropzone > .icon { color: var(--violet); }
+.dropzone b { color: var(--text); font-weight: 600; }
+.picked { max-height: 170px; overflow: auto; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--card); padding: 4px; }
+.picked-row { padding: 4px 6px; border-radius: 8px; gap: 8px; }
+.picked-row:hover { background: var(--surface); }
+.field-label { font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 8px; }
+.choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.choice { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 13px 14px; text-align: left; cursor: pointer;
+  border-radius: var(--radius-lg); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-2); font-size: 12px; line-height: 1.45;
+  transition: border-color 0.15s, box-shadow 0.15s; }
+.choice b { color: var(--text); font-size: 13.5px; font-weight: 600; }
+.choice:hover { border-color: var(--text-3); }
+.choice[aria-pressed="true"] { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary), var(--shadow-sm); }
+.choice-icon { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; margin-bottom: 4px;
+  background: var(--accent-soft); color: var(--accent); }
+.choice:last-child .choice-icon { background: var(--pink-soft); color: var(--pink); }
+.drop-overlay { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; pointer-events: none;
+  background: rgb(124 92 246 / 10%); backdrop-filter: blur(2px); animation: fade-in 0.12s ease-out; }
+.drop-overlay > div { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 28px 40px; border-radius: 22px;
+  border: 2px dashed var(--violet); background: var(--surface); color: var(--violet); box-shadow: var(--shadow-lg); }
+.drop-overlay b { color: var(--text); font-size: 17px; font-weight: 600; letter-spacing: -0.02em; }
+.drop-overlay span { color: var(--text-3); font-size: 12px; }
+@media (max-width: 640px) { .choice-grid { grid-template-columns: 1fr; } }

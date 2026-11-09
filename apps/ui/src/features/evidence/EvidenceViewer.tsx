@@ -7,7 +7,7 @@ import { authedUrl, type Chunk, type Evidence, type Locator } from "@folio/api-c
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useApi } from "@/api/client";
 import { useChunks, useLabel, useSource } from "@/api/queries";
-import { basename, locatorLabel } from "@/lib/format";
+import { basename, fileSize, locatorLabel } from "@/lib/format";
 import { ui } from "@/state/selection";
 import { Icon } from "@/components/Icon";
 import { PdfPage } from "./PdfPage";
@@ -128,7 +128,7 @@ export function SourceViewer({ sourceId }: { sourceId: string }) {
   return (
     <Frame title={<span title={src.path}>{basename(src.path)}</span>}>
       <div className="row small muted" style={{ marginBottom: 10 }}>
-        <span className={`badge ${src.status}`}>{src.status}</span> {src.kind} · {detail.chunks} passages · {(src.size / 1024 / 1024).toFixed(1)} MB
+        <span className={`badge ${src.status}`}>{src.status}</span> {src.kind} · {detail.chunks} passage{detail.chunks === 1 ? "" : "s"} · {fileSize(src.size)}
       </div>
       {src.error && <div className="callout bad" style={{ marginBottom: 10 }}><Icon name="alert" /><span>{src.error}</span></div>}
       {src.kind === "pdf" && <PdfPage url={fileUrl} page={1} />}

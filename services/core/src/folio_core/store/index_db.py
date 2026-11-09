@@ -112,6 +112,13 @@ class IndexDB:
                 self._writer.executescript(f"BEGIN;\n{f.read_text()}\nPRAGMA user_version={version};\nCOMMIT;")
 
     def compact(self) -> None:
+        # FTS5 keeps tombstones for deleted passages until its segments are merged; without this
+        # the search index kept growing even after files were removed (VACUUM cannot reclaim it).
+        try:
+            with self._write_lock:
+                self._writer.execute("INSERT INTO chunks_fts(chunks_fts) VALUES('optimize')")
+        except sqlite3.Error as exc:
+            log.warning("search index optimize skipped: %s", exc)
         compact(self._writer, self._write_lock, self.path.name)
 
     def reset(self) -> None:

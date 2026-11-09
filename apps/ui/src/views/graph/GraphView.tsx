@@ -153,7 +153,7 @@ export function GraphView() {
         {isLoading && <div className="empty-inline"><Icon name="loader" spin /></div>}
         {data && data.nodes.length === 0 && (
           <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
-            <EmptyState icon="graph" title="No entities yet">
+            <EmptyState icon="graph" title={<>Your knowledge <b>graph</b></>}>
               People, topics and organisations appear here as bubbles once facts are extracted — connect an AI model in Settings, or select a file and describe it below.
             </EmptyState>
           </div>

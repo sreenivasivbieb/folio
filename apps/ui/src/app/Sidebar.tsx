@@ -1,10 +1,11 @@
 /** Left sidebar: Library (files) · Review queue · Activity (jobs + history), plus the AI and voice
  * status cards — so it is always obvious whether extraction and voice are actually available. */
-import { useFilePage, useJobs, useReview, useSources, useStatus } from "@/api/queries";
+import { useFilePage, useJobs, useReview, useSources, useStatus, useVault } from "@/api/queries";
 import { Icon, type IconName } from "@/components/Icon";
 import { ActivityPanel } from "@/features/jobs/ActivityPanel";
 import { ReviewPanel } from "@/features/review/ReviewPanel";
 import { SourcesPanel } from "@/features/sources/SourcesPanel";
+import { TrashPanel } from "@/features/vault/TrashPanel";
 import { type LeftTab, openSettings, ui } from "@/state/selection";
 
 function NavItem({ id, icon, label, count, muted }: { id: LeftTab; icon: IconName; label: string; count?: number; muted?: boolean }) {
@@ -53,6 +54,7 @@ export function Sidebar() {
   const { data: files } = useFilePage("", 0); // same count as the Files list (incl. metadata-only)
   const { data: review } = useReview();
   const { data: jobs } = useJobs();
+  const { data: vault } = useVault();
   const reviewCount = review ? review.total_proposed + review.merge_suggestions.length + review.flagged.length + review.conflicts.length : 0;
   const busy = jobs?.filter((j) => j.status === "running" || j.status === "queued").length ?? 0;
   const failed = jobs?.filter((j) => j.status === "failed").length ?? 0;
@@ -62,11 +64,13 @@ export function Sidebar() {
         <NavItem id="sources" icon="folder" label="Library" count={files?.total ?? sources?.length} muted />
         <NavItem id="review" icon="inbox" label="Review" count={reviewCount} />
         <NavItem id="activity" icon="activity" label="Activity" count={busy || failed} muted={!failed} />
+        <NavItem id="trash" icon="trash" label="Trash" count={vault?.trashed} muted />
       </nav>
       <section className="sidebar-section">
         {tab === "sources" && <SourcesPanel />}
         {tab === "review" && <ReviewPanel />}
         {tab === "activity" && <ActivityPanel />}
+        {tab === "trash" && <TrashPanel />}
       </section>
       <StatusCards />
     </aside>

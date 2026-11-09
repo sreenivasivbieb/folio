@@ -13,10 +13,11 @@ import { EntityCardPanel } from "@/features/entities/EntityCardPanel";
 import { EvidenceViewer, SourceViewer } from "@/features/evidence/EvidenceViewer";
 import { SearchPalette } from "@/features/search/SearchPalette";
 import { SettingsModal } from "@/features/settings/SettingsModal";
-import { useAddRoot } from "@/features/sources/SourcesPanel";
 import { VoiceBar } from "@/features/voice/VoiceBar";
-import { ScanModal } from "@/features/sources/ScanModal";
-import { openSettings, ui, type ViewName } from "@/state/selection";
+import { AddModal } from "@/features/vault/AddModal";
+import { ExportModal } from "@/features/vault/ExportModal";
+import { useDropToAdd } from "@/features/vault/useDropToAdd";
+import { openAdd, openSettings, type ViewName, ui } from "@/state/selection";
 import { toasts } from "@/state/toast";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { GraphView } from "@/views/graph/GraphView";
@@ -67,7 +68,6 @@ function Onboarding() {
 function MainArea() {
   const view = ui.use((s) => s.view);
   const { data: status } = useStatus();
-  const addRoot = useAddRoot();
   const empty = status && status.counts.sources === 0;
   return (
     <main className="main">
@@ -90,16 +90,16 @@ function MainArea() {
       {empty ? (
         <div className="view" style={{ display: "grid", placeItems: "center" }}>
           <EmptyState
-            icon="folder"
-            title="Bring your files"
+            icon="download"
+            tag={["Your vault", "Stored locally, in one place"]}
+            title={<>Dump your files into <b>Folio</b></>}
             actions={<>
-              <button type="button" className="btn primary" onClick={() => ui.set({ modal: "scan" })}><Icon name="search" /> Scan my computer</button>
-              <button type="button" className="btn primary" onClick={() => addRoot.mutate(true)}><Icon name="folder" /> Add a folder</button>
-              <button type="button" className="btn" onClick={() => addRoot.mutate(false)}><Icon name="file" /> Add a file</button>
+              <button type="button" className="btn primary" onClick={() => openAdd()}><Icon name="plus" /> Add to Folio</button>
             </>}
           >
-            PDFs, scans, images, Word and Markdown notes, audio, video and transcripts. Folio reads them in place — nothing is
-            copied, moved or changed — and builds a knowledge graph you can check and correct.
+            Drop files or folders onto this window, or choose them. Each time you decide: <b>move</b> them in (they then live only
+            in Folio — no duplicate disk space) or <b>copy</b> them. PDFs, scans, images, Word and Markdown, audio, video and transcripts
+            become searchable, connected knowledge.
           </EmptyState>
         </div>
       ) : (
@@ -133,7 +133,7 @@ function Inspector() {
   else if (focus) content = <EntityCardPanel entityId={focus} />;
   else
     content = (
-      <EmptyState icon="info" title="Nothing selected">
+      <EmptyState icon="info" title={<>Nothing <b>selected</b></>}>
         Click an entity in the graph, a file in the library, or search with <span className="kbd">Ctrl K</span>. Every fact shows where it came from —
         the page, the paragraph or the second in a video.
       </EmptyState>
@@ -156,6 +156,7 @@ export function Layout() {
   useCoreEvents();
   useShortcuts();
   const modal = ui.use((s) => s.modal);
+  const dragging = useDropToAdd();
   return (
     <div className="app">
       <TopBar />
@@ -166,7 +167,11 @@ export function Layout() {
       <Toasts />
       {modal === "search" && <SearchPalette />}
       {modal === "settings" && <SettingsModal />}
-      {modal === "scan" && <ScanModal />}
+      {modal === "add" && <AddModal />}
+      {modal === "export" && <ExportModal />}
+      {dragging && (
+        <div className="drop-overlay"><div><Icon name="download" size={30} /><b>Drop to add to Folio</b><span>You'll choose to move or copy next</span></div></div>
+      )}
     </div>
   );
 }
