@@ -5,7 +5,7 @@ import { unwrap, useApi } from "@/api/client";
 import { inTauri } from "@/api/connection";
 import { useAction, useFilePage, useJobs, useRoots } from "@/api/queries";
 import { Icon, kindIcon } from "@/components/Icon";
-import { basename } from "@/lib/format";
+import { basename, fileSize } from "@/lib/format";
 import { selectSource, ui } from "@/state/selection";
 
 async function pickPath(directory: boolean): Promise<string | null> {
@@ -29,7 +29,7 @@ export function useAddRoot() {
 function statusLine(s: Source, progress?: { p: number; m: string | null }): string {
   if (s.status === "indexing" && progress) return progress.m ?? `${Math.round(progress.p * 100)}%`;
   if (s.status === "failed") return s.error?.split("\n")[0] ?? "failed";
-  if (s.status === "indexed") return `${s.kind} · ${(s.size / 1024 / 1024).toFixed(s.size > 1024 * 1024 ? 1 : 2)} MB`;
+  if (s.status === "indexed") return `${s.kind} · ${fileSize(s.size)}`;
   if (s.status === "metadata") return "Metadata only · content format not supported";
   return s.status;
 }

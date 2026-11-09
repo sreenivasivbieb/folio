@@ -22,7 +22,7 @@ from typing import Any
 
 from ..domain.errors import InvalidInput
 from ..domain.rules import normalize_name
-from ..domain.schema import SchemaDef
+from ..domain.schema import SchemaDef, canonical_type
 from ..domain.values import coerce
 from ..learning import GazetteerEntry
 
@@ -174,7 +174,7 @@ class _Plan:
         if not c:
             return
         for handler in (self._status, self._merge, self._relation_phrase, self._this_is,
-                        self._the_noun_is, self._attribute_phrase):
+                        self._the_noun_is, self._x_is_its_noun, self._attribute_phrase):
             try:
                 if handler(o, c):
                     return
@@ -233,6 +233,10 @@ class _Plan:
         rest = m["rest"].strip()
         bare = _ARTICLE.sub("", rest).strip()
         as_type = self.ctx.schema.type_for_word(bare)
+        # Open schema: "it is a Course" / "this is an Algorithm" names a *type* even when no hint
+        # knows it ("the X" names the thing itself).
+        if as_type is None and re.match(r"(?:a|an)\s", rest, re.I) and len(bare.split()) <= 3:
+            as_type = canonical_type(bare, self.ctx.known_types)
         if as_type:  # "it is a person" -> set/fix the type of the focus
             key = self.this_ref()
             if self.refs[key]["new"]:
@@ -241,6 +245,11 @@ class _Plan:
             else:
                 self.ops.append({"op": "retype", "entity": key, "type": as_type})
             return True
+        # "the contract of Acme" / "the report for Atlas" -> "Acme contract" (type from the noun).
+        # Translated Hindi labels ("yeh Acme ka contract hai") come out in this shape.
+        m2 = re.fullmatch(r"(?P<t>[\w-]+) (?:of|for) (?:the )?(?P<n>.+)", bare, re.I)
+        if m2 and (self.ctx.schema.type_for_word(m2["t"]) or m2["t"].lower() in (t.lower() for t in self.ctx.known_types)):
+            bare = f"{m2['n']} {m2['t']}"
         if self.ctx.target_kind in ("source", "chunk") and self.ctx.source_id:
             key = self.ref(bare)
             if not any(op.get("op") == "represent" and op["entity"] == key for op in self.ops):
@@ -269,6 +278,24 @@ class _Plan:
             self._add_attribute(attr, value)
             return True
         raise InvalidInput(f"'{noun}' is not an attribute or relation in the schema")
+
+    def _x_is_its_noun(self, o: str, c: str) -> bool:
+        """'Priya is its owner' / 'Acme is the party' — the reverse of 'the owner is Priya'
+        (common after translating Hindi: 'Priya iski maalik hai')."""
+        m = re.fullmatch(r"(?P<x>.+?) (?:is|was|are|were) (?:its|the|his|her|their) (?P<noun>[\w ]+?)(?: of (?:it|this|that|the)(?: [\w ]+)?)?", o, re.I)
+        if not m or PRONOUN.match(m["x"].strip()):
+            return False
+        noun = m["noun"].lower().strip()
+        for name, rel in self.ctx.schema.relation_types.items():
+            if rel.noun and rel.noun == noun:
+                subject = self.ref(m["x"], rel.source)
+                self.ops.append({"op": "relation", "subject": subject, "predicate": name, "object": self.this_ref()})
+                return True
+        attr = self._attribute_for(noun)
+        if attr:
+            self._add_attribute(attr, m["x"])
+            return True
+        return False
 
     def _attribute_phrase(self, o: str, c: str) -> bool:
         m = re.fullmatch(r"(?:it |which )?(?:was |is |were )?(?P<phrase>\w+(?: \w+)??)(?: on| at| for| by| in)? (?P<value>.+)", o, re.I)

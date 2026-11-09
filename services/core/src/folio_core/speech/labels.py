@@ -26,6 +26,8 @@ from ..store.local import KnowledgeDB
 from .label_parser import LabelContext, RuleLabelParser, answer_question
 from .recorder import MicRecorder
 
+BEAM_SIZE = 3  # short commands: near-greedy decoding keeps end-of-speech -> preview fast
+
 
 class LabelService:
     def __init__(self, *, kdb: KnowledgeDB, index: IndexDB, ledger: Ledger, knowledge: KnowledgeService,
@@ -40,6 +42,7 @@ class LabelService:
         self.parser = RuleLabelParser()
         self.recorder = MicRecorder()
         self._target: tuple[str, list[str]] = ("none", [])
+        self.focus: tuple[str, list[str]] = ("none", [])  # what the UI has selected right now
         self._lock = threading.Lock()
 
     # --- capture --------------------------------------------------------------------------
@@ -59,6 +62,8 @@ class LabelService:
     def start(self, target_kind: str, target_ids: list[str]) -> None:
         if not self.transcriber.installed():
             raise Unavailable("the speech model is not downloaded yet — download it in Settings, or type the label")
+        if target_kind == "none":  # e.g. a desktop hotkey: label whatever the UI has selected
+            target_kind, target_ids = self.focus
         with self._lock:
             self._target = (target_kind, target_ids)
             self.recorder.start()
@@ -71,10 +76,14 @@ class LabelService:
             audio.unlink(missing_ok=True)
             raise InvalidInput("recording too short")
         ensure_allowed(self.kdb, self.transcriber)
-        segments = self.transcriber.transcribe(audio, prompt=self.learning.vocabulary_prompt())
+        # Labels are always turned into English (Whisper's offline translate mode), so Hindi or
+        # Hinglish speech reaches the English label grammar. The audio stays as evidence.
+        segments = self.transcriber.transcribe(audio, prompt=self.learning.vocabulary_prompt(),
+                                               task="translate", beam_size=BEAM_SIZE)
         transcript = " ".join(s.text for s in segments).strip()
         if not transcript:
-            raise InvalidInput("no speech detected")
+            audio.unlink(missing_ok=True)
+            raise InvalidInput("no speech detected — hold the button while you speak")
         kind, ids = self._target
         return self.preview(transcript, kind, ids, audio_path=str(audio), label_id=label_id)
 
@@ -138,6 +147,17 @@ class LabelService:
             })
             lid = tx.changed[0][1]
         return repo.get_label(self.kdb, lid)  # type: ignore[return-value]
+
+    def revise(self, label_id: str, transcript: str) -> Label:
+        """Fix what the speech model misheard ("PREA" -> "Priya") and re-plan. The audio stays."""
+        label = self._open_label(label_id)
+        transcript = transcript.strip()
+        if not transcript:
+            raise InvalidInput("label is empty")
+        parsed = self.parser.parse(transcript, self._context(label.target_kind, label.target_ids))
+        with self.ledger.group("system", "label.revise", transcript[:80]) as tx:
+            tx.update("labels", label_id, {"transcript": transcript, "parsed": parsed})
+        return repo.get_label(self.kdb, label_id)  # type: ignore[return-value]
 
     def answer(self, label_id: str, question_id: str, value: str) -> Label:
         label = self._open_label(label_id)

@@ -4,7 +4,7 @@
 
 **Turn files on your computer into searchable, connected knowledge.**
 
-Folio is a desktop file organizer for Omarchy Linux. Scan folders and mounted drives,
+Folio is a desktop file organizer for **Windows and Linux** (including Omarchy/Arch). Scan folders and mounted drives,
 search document passages, review extracted people and facts, and explore their
 connections in graph, table, timeline and swimlane views. Every extracted fact keeps
 its supporting source evidence.
@@ -14,7 +14,7 @@ local files on your machine. Choose offline processing, a local AI model, or a c
 AI provider with your own API key. Optional Google Drive backup uses your own Google
 account and OAuth credentials.
 
-[Install](#install-on-omarchy) · [First scan](#your-first-scan) ·
+[Install](#install) · [First scan](#your-first-scan) ·
 [Storage](#your-data-and-privacy) · [AI](#choose-your-ai) ·
 [Google Drive](#optional-google-drive-backup) · [Development](#development)
 
@@ -26,10 +26,27 @@ account and OAuth credentials.
   document pages, text lines or media timestamps.
 - **Review extracted knowledge:** edit, verify or reject proposed facts, with history
   and undo/redo. Explore connections in graph, table, timeline and swimlane views.
-- **Add voice labels:** transcribe speech locally with an explicitly downloaded
-  Whisper model, then review the proposed changes.
+- **Add voice labels:** hold a key and speak — in English, Hindi or Hinglish. Speech is
+  recognised and translated to English on your computer by an explicitly downloaded
+  Whisper model; you review (and can correct) the result before anything is saved.
 - **Keep portable backups:** export JSON, GraphML, Markdown or CSV, and restore Folio
   JSON backups into an empty project.
+
+## Install
+
+| Platform | Installer | Built by |
+| --- | --- | --- |
+| Windows 10/11 x64 | `Folio_x.y.z_x64-setup.exe` (per-user) or `.msi` | [Release workflow](.github/workflows/release.yml) |
+| Linux x86_64, any distro | `Folio_x.y.z_amd64.AppImage` (`chmod +x`, then run) | Release workflow |
+| Debian / Ubuntu | `Folio_x.y.z_amd64.deb` (`sudo apt install ./Folio_*.deb`) | Release workflow |
+| Fedora / openSUSE | `Folio-x.y.z-1.x86_64.rpm` (`sudo dnf install ./Folio-*.rpm`) | Release workflow |
+| Omarchy / Arch | `folio-x.y.z-1-x86_64.pkg.tar.zst` | `scripts/build-omarchy.sh` (below) |
+
+Every installer bundles the core service, speech recognition, audio/video decoding and
+microphone support — no Python, ffmpeg or other runtime to install. Windows uses the
+system WebView2 (the installer fetches it if missing). Push a tag like `v0.3.0` (or run
+the workflow manually) to build all of them; tagged builds are attached to a draft
+GitHub release with SHA-256 checksums.
 
 ## Install on Omarchy
 
@@ -118,12 +135,12 @@ You can adjust exclusions in the scan dialog.
 | Word | `.docx` | Document text extraction |
 | Subtitles | `.srt`, `.vtt` | Text with timestamps |
 | Images | `.png`, `.jpg`, `.jpeg`, `.webp`, `.tif`, `.tiff`, `.bmp`, `.gif` | Optional OCR; basic image details when text is unavailable |
-| Audio | `.mp3`, `.wav`, `.m4a`, `.ogg`, `.oga`, `.opus`, `.flac`, `.aac` | Local transcription with timestamps |
-| Video | `.mp4`, `.mkv`, `.mov`, `.webm`, `.avi`, `.m4v` | Local transcription of the audio track |
+| Audio | `.mp3`, `.wav`, `.m4a`, `.ogg`, `.oga`, `.opus`, `.flac`, `.aac`, `.wma` | Local transcription with timestamps |
+| Video | `.mp4`, `.mkv`, `.mov`, `.webm`, `.avi`, `.m4v`, `.wmv` | Local transcription of the audio track |
 
-OCR requires Tesseract with English language data. Audio/video indexing requires
-`ffmpeg` and a downloaded speech model. The Omarchy build bundles speech support;
-download its model in **Settings → Voice** when you want to use it.
+OCR requires Tesseract with English language data (optional on every platform).
+Audio/video indexing needs only the speech model: download it once in
+**Settings → Voice** (~480 MB). Decoding is built in — no ffmpeg needed.
 
 ## Your data and privacy
 
@@ -268,12 +285,16 @@ it measures the rule extractor on those fixtures, rather than live AI model qual
 | Some files are absent from a scan | Check location permissions, hidden-file settings, exclusions and Activity errors |
 | A file says **Metadata only** | Its format has no content parser; its path and metadata are still inventoried |
 | Images or scanned PDFs have no extracted text | Check Tesseract and its English language data |
-| Audio/video indexing fails | Check `ffmpeg`, the speech-model download and the failed job in Activity |
+| Audio/video indexing fails | Check the speech-model download (Settings → Voice) and the failed job in Activity |
+| Voice: nothing happens on Wayland | Apps can't grab global keys there: bind a desktop shortcut to `folio-core voice toggle` (Settings → Voice) |
+| Voice: a name is misheard | Click **Edit** in the label preview, fix the text, **Re-check** |
 | AI connection fails | Check the local server or hosted provider URL, model and your API key; use **Test** |
 | Drive restore is unavailable | Restore into an empty project using the OAuth client that created the backup |
 
 The Omarchy x86_64 package has been built and checked with generated sample files,
 including scanning and persistence after restart. Live Google sign-in, real-provider
 AI behavior, whole-computer scan performance and native Wayland interaction still need
-validation on target installations. CI builds the desktop shell on Linux, macOS and
-Windows; those builds alone do not establish installer or runtime support for every OS.
+validation on target installations. CI runs the core test suite on Linux and Windows and
+builds the desktop shell on Linux, macOS and Windows; the release workflow builds and
+smoke-tests the bundled core for the Windows and Linux installers. Installing and using
+them on real Windows/Linux machines (microphone, WebView2) still needs a manual check.

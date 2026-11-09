@@ -274,6 +274,16 @@ export function useLabelActions(onLabel: (l: Label | null) => void) {
       onLabel(label);
       return label;
     }),
+    revise: useAction(async (a: { id: string; transcript: string }) => {
+      const label = unwrap(
+        await client.POST("/api/labels/{label_id}/transcript", {
+          params: { path: { label_id: a.id } },
+          body: { transcript: a.transcript },
+        }),
+      );
+      onLabel(label);
+      return label;
+    }),
     answer: useAction(async (a: { id: string; question: string; value: string }) => {
       const label = unwrap(
         await client.POST("/api/labels/{label_id}/answer", {

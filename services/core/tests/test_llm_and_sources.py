@@ -1,6 +1,7 @@
 """Bring-your-own-key LLM routing, provider fallbacks, and source lifecycle fixes."""
 
 import json
+import sys
 
 import httpx
 import pytest
@@ -67,7 +68,8 @@ def test_llm_settings_api_keeps_the_key_secret_and_opts_into_cloud(tmp_path):
 
     exported = json.dumps(c.exporter.to_json())
     assert "sk-or" not in exported  # keys never reach the database or exports
-    assert (c.settings.secrets_file.stat().st_mode & 0o777) == 0o600
+    if sys.platform != "win32":  # POSIX permissions; Windows keeps it in the user's profile
+        assert (c.settings.secrets_file.stat().st_mode & 0o777) == 0o600
 
     with TestClient(create_app(c, TOKEN, start_background=False)) as tc:
         tc.headers["Authorization"] = f"Bearer {TOKEN}"
@@ -121,3 +123,21 @@ def test_media_waits_for_the_speech_model_instead_of_downloading(tmp_path):
     src = repo.list_sources(c.kdb)[0]
     assert src.status.value == "failed" and "speech model not downloaded" in src.error
     assert c.labels.status()["speech_available"] is False
+
+
+def test_unreachable_provider_and_crashes_reach_the_ui_with_cors_and_a_reason(tmp_path):
+    c = make_container(tmp_path, llm=None)
+    app = create_app(c, TOKEN, start_background=False)
+
+    @app.get("/api/boom")
+    def boom() -> None:
+        raise RuntimeError("kaboom")
+
+    origin = {"Origin": "http://127.0.0.1:1420", "Authorization": f"Bearer {TOKEN}"}
+    with TestClient(app, raise_server_exceptions=False) as tc:
+        r = tc.post("/api/llm/models", json={"provider": "custom", "base_url": "http://127.0.0.1:9/v1"}, headers=origin)
+        assert r.status_code == 503 and "cannot reach" in r.json()["detail"]
+        assert r.headers["access-control-allow-origin"] == "http://127.0.0.1:1420"
+        r = tc.get("/api/boom", headers=origin)
+        assert r.status_code == 500 and "kaboom" in r.json()["detail"]
+        assert r.headers["access-control-allow-origin"] == "http://127.0.0.1:1420"

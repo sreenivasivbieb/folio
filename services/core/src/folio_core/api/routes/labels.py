@@ -9,7 +9,7 @@ from ...domain.errors import NotFound
 from ...domain.models import Label
 from ...store import repo
 from ..deps import C
-from ..dto import AnswerBody, Ok, Target, TypedLabel, VoiceStatus, VoiceToggle
+from ..dto import AnswerBody, Ok, Target, TranscriptBody, TypedLabel, VoiceStatus, VoiceToggle
 
 router = APIRouter(tags=["labels"])
 
@@ -41,6 +41,14 @@ def voice_cancel(c: C) -> Ok:
     return Ok()
 
 
+@router.post("/voice/focus", response_model=Ok)
+def voice_focus(body: Target, c: C) -> Ok:
+    """The UI reports its selection, so a desktop hotkey (which knows nothing about the UI)
+    labels the right thing."""
+    c.labels.focus = (body.target_kind, body.target_ids)
+    return Ok()
+
+
 @router.post("/voice/toggle", response_model=VoiceToggle)
 def voice_toggle(body: Target, c: C) -> VoiceToggle:
     """One endpoint for a global hotkey (e.g. a Hyprland bind calling `folio-core voice toggle`).
@@ -68,6 +76,12 @@ def get_label(label_id: str, c: C) -> Label:
     if label is None:
         raise NotFound(f"label {label_id} not found")
     return label
+
+
+@router.post("/labels/{label_id}/transcript", response_model=Label)
+def revise_transcript(label_id: str, body: TranscriptBody, c: C) -> Label:
+    """Correct a misheard transcript in the preview; the label is re-planned."""
+    return c.labels.revise(label_id, body.transcript)
 
 
 @router.post("/labels/{label_id}/answer", response_model=Label)

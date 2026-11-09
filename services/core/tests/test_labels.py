@@ -135,3 +135,16 @@ def test_naming_an_auto_entity_in_a_label_verifies_it(container):
     label = container.labels.preview("Priya owns the Acme contract", "none", [])
     container.labels.confirm(label.id)
     assert repo.get_entity(container.kdb, row["id"]).status == EntityStatus.VERIFIED
+
+
+def test_translated_hindi_label_shapes_are_understood(container, pdf_source):
+    """What Whisper's translate mode returns for 'Yeh Acme ka contract hai. Priya iski maalik hai.'"""
+    label = container.labels.preview("This is the contract of Acme. Priya is its owner.", "source", [pdf_source.id])
+    plan = label.parsed
+    assert not plan["unparsed"]
+    refs = {r["name"]: r for r in plan["refs"].values()}
+    assert refs["Acme contract"]["type"] == "Contract"
+    assert [op["op"] for op in plan["ops"]] == ["represent", "relation"]
+    assert plan["ops"][1]["predicate"] == "owns"
+    other = container.labels.preview("Priya is the owner of this contract", "source", [pdf_source.id])
+    assert not other.parsed["unparsed"] and other.parsed["ops"][-1]["predicate"] == "owns"

@@ -5,7 +5,10 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+import numpy as np
+
 from ...domain.errors import Unavailable
+from .audio import SAMPLE_RATE, load_media, load_wav
 from .base import Progress, Segment
 
 # Approximate download sizes (MB) so the UI can say what a download costs.
@@ -80,22 +83,39 @@ class FasterWhisperTranscriber:
                     raise Unavailable(f"speech model '{self.size}' is not downloaded yet")
                 from faster_whisper import WhisperModel
 
-                self._model = WhisperModel(self.size, device="auto", compute_type="int8",
-                                           download_root=self._root, local_files_only=True)
+                try:
+                    self._model = WhisperModel(self.size, device="auto", compute_type="int8",
+                                               download_root=self._root, local_files_only=True)
+                except Exception:  # e.g. CUDA visible but its libraries missing (common on Windows)
+                    self._model = WhisperModel(self.size, device="cpu", compute_type="int8",
+                                               download_root=self._root, local_files_only=True)
         return self._model
 
+    def warm(self) -> None:
+        """Load the model ahead of the first push-to-talk (loading takes a few seconds)."""
+        if self.installed():
+            self._load()
+
     def transcribe(
-        self, audio_path: Path, language: str | None = None, prompt: str | None = None,
-        on_progress: Progress | None = None,
+        self, audio: Path | np.ndarray, language: str | None = None, prompt: str | None = None,
+        on_progress: Progress | None = None, task: str = "transcribe", beam_size: int = 5,
     ) -> list[Segment]:
-        segments, info = self._load().transcribe(
-            str(audio_path), language=language, initial_prompt=prompt, vad_filter=True, beam_size=5,
+        """``audio`` is a file or 16 kHz mono float32 samples. ``task="translate"`` turns any
+        spoken language (Hindi, Hinglish, ...) into English text — used for voice labels.
+        ``beam_size=1`` (greedy) is used for short commands to keep latency low."""
+        if isinstance(audio, Path):
+            audio = load_wav(audio) if audio.suffix.lower() == ".wav" else load_media(audio)
+        duration = audio.size / SAMPLE_RATE
+        if duration < 0.1:
+            return []
+        segments, _info = self._load().transcribe(
+            audio, language=language, initial_prompt=prompt, vad_filter=True, beam_size=beam_size, task=task,
         )
         out: list[Segment] = []
         last = 0.0
         for s in segments:  # a generator: transcription happens while we iterate
             out.append(Segment(start=s.start, end=s.end, text=s.text.strip()))
-            if on_progress and info.duration and time.monotonic() - last > 1.0:
+            if on_progress and time.monotonic() - last > 1.0:
                 last = time.monotonic()
-                on_progress(min(s.end / info.duration, 1.0))
+                on_progress(min(s.end / duration, 1.0))
         return out

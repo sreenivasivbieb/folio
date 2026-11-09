@@ -14,9 +14,20 @@ TRIPLE="$("$RUSTC" -vV | sed -n 's/^host: //p')"
 EXT=""
 case "$TRIPLE" in *windows*) EXT=".exe" ;; esac
 
+# Linux: bundle PortAudio so the microphone works in the AppImage on any distro (Windows and
+# macOS get it from the sounddevice wheel). The core loads it from the bundle when frozen.
+EXTRA_BINARIES=()
+case "$TRIPLE" in
+  *linux*)
+    PA="$(ldconfig -p 2>/dev/null | awk '/libportaudio\.so\.2 /{p=$NF} END{print p}')"
+    if [ -n "$PA" ]; then EXTRA_BINARIES+=(--add-binary "$PA:."); else echo "warning: libportaudio.so.2 not found; AppImage will need it installed" >&2; fi
+    ;;
+esac
+
 cd "$CORE"
 uv sync --frozen --extra speech --group build
 uv run --frozen --extra speech --group build pyinstaller \
+  "${EXTRA_BINARIES[@]}" --collect-all av \
   --noconfirm --clean --onefile --name folio-core \
   --collect-data folio_core \
   --collect-all sqlite_vec \

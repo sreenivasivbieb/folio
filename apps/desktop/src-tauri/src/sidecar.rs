@@ -149,6 +149,13 @@ impl Sidecar {
             use std::os::unix::process::CommandExt;
             cmd.process_group(0);
         }
+        #[cfg(windows)]
+        {
+            // The core is a console program: without this, Windows opens a black console
+            // window next to Folio for as long as the app runs.
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        }
         let mut child = cmd.spawn().map_err(|e| format!("cannot launch core: {e}"))?;
         let stdout = child.stdout.take().ok_or("no stdout")?;
         {

@@ -19,5 +19,5 @@ class NoTranscriber:
         return False
 
     def transcribe(self, audio_path: Path, language: str | None = None,
-                   prompt: str | None = None, on_progress=None) -> list[Segment]:  # type: ignore[no-untyped-def]
+                   prompt: str | None = None, on_progress=None, task: str = "transcribe", beam_size: int = 5) -> list[Segment]:  # type: ignore[no-untyped-def]
         raise Unavailable(f"speech-to-text unavailable: {self.reason}")

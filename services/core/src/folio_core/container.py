@@ -77,6 +77,9 @@ class Container:
             self.watcher.start()
         if background_scan:  # catch changes made while the app was closed
             threading.Thread(target=self.ingestion.rescan_all, name="folio-rescan", daemon=True).start()
+        warm = getattr(self.providers.stt, "warm", None)
+        if warm:  # load the speech model now, so the first push-to-talk is fast
+            threading.Thread(target=warm, name="folio-stt-warm", daemon=True).start()
 
     def stop(self) -> None:
         self.watcher.stop()
@@ -132,6 +135,8 @@ def build_container(settings: Settings, providers: Providers | None = None,
         if not hasattr(stt, "download"):
             raise RuntimeError("speech support is not installed (folio-core[speech])")
         stt.download(lambda f, m: queue.progress(job.id, f, m))
+        queue.progress(job.id, 0.99, "loading the model")
+        stt.warm()
         n = ingestion.requeue_media()
         bus.publish({"type": "voice"})
         return f"{stt.model_id} ready; {n} audio/video file(s) queued"

@@ -110,7 +110,11 @@ class OpenAICompatibleLLM:
         return _FENCE.sub("", content.strip())
 
     def list_models(self) -> list[str]:
-        resp = self._client.get(f"{self.base_url}/models", timeout=20)
+        try:
+            resp = self._client.get(f"{self.base_url}/models", timeout=20)
+        except httpx.TransportError as exc:
+            raise Unavailable(f"cannot reach {self.base_url} — check the URL, your connection, "
+                              "or that the local server (e.g. Ollama) is running") from exc
         if not resp.is_success:
             self._raise(resp)
         data = resp.json()

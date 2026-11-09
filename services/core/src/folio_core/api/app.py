@@ -12,7 +12,7 @@ from .. import __version__
 from ..container import Container
 from ..domain.errors import Conflict, InvalidInput, NotFound, PrivacyBlocked, Unavailable
 from .routes import data, drive, knowledge, labels, ledger, sources, system, views
-from .security import TokenAuthMiddleware
+from .security import ErrorBoundaryMiddleware, TokenAuthMiddleware
 
 ERROR_STATUS = {NotFound: 404, Conflict: 409, InvalidInput: 422, PrivacyBlocked: 403, Unavailable: 503}
 
@@ -40,7 +40,9 @@ def create_app(container: Container, token: str, start_background: bool = True) 
     for module in (system, sources, knowledge, views, labels, ledger, data, drive):
         app.include_router(module.router, prefix="/api")
 
-    # Added last = outermost: CORS answers preflights before the token check runs.
+    # Added last = outermost: CORS answers preflights before the token check runs, and the
+    # error boundary sits inside CORS so even crashes reach the UI with a readable message.
+    app.add_middleware(ErrorBoundaryMiddleware)
     app.add_middleware(TokenAuthMiddleware, token=token,
                        allowed_origins=container.settings.allowed_origins)
     app.add_middleware(CORSMiddleware, allow_origins=list(container.settings.allowed_origins),

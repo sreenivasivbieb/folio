@@ -51,3 +51,33 @@ async def _deny(send: Send, status: int, detail: str) -> None:
                 "headers": [(b"content-type", b"application/json"),
                             (b"content-length", str(len(body)).encode())]})
     await send({"type": "http.response.body", "body": body})
+
+
+class ErrorBoundaryMiddleware:
+    """Unexpected failures become a JSON 500 *inside* the CORS layer, so the UI shows the real
+    cause instead of an opaque "blocked by CORS" error. Details go to the core log."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        started = False
+
+        async def tracking_send(message):  # type: ignore[no-untyped-def]
+            nonlocal started
+            if message["type"] == "http.response.start":
+                started = True
+            await send(message)
+
+        try:
+            await self.app(scope, receive, tracking_send)
+        except Exception as exc:
+            import logging
+
+            logging.getLogger("folio_core.api").exception("unhandled error on %s", scope.get("path"))
+            if started:
+                raise
+            await _deny(send, 500, f"Unexpected error ({type(exc).__name__}): {exc}"[:500])

@@ -46,3 +46,22 @@ export function shortDate(iso: string | null | undefined): string {
 export function confidenceBand(c: number): "high" | "mid" | "low" {
   return c >= 0.75 ? "high" : c >= 0.5 ? "mid" : "low";
 }
+
+/** 512 B · 4.2 KB · 3.8 MB · 1.2 GB */
+export function fileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let v = bytes / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v >= 10 ? Math.round(v) : v.toFixed(1)} ${units[i]}`;
+}
+
+/** The OS the UI runs on, for showing the right shortcuts. */
+export function platform(): "windows" | "mac" | "linux" {
+  const p = `${navigator.platform} ${navigator.userAgent}`.toLowerCase();
+  return p.includes("win") ? "windows" : p.includes("mac") ? "mac" : "linux";
+}

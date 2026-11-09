@@ -1,6 +1,6 @@
 /** Left sidebar: Library (files) · Review queue · Activity (jobs + history), plus the AI and voice
  * status cards — so it is always obvious whether extraction and voice are actually available. */
-import { useJobs, useReview, useSources, useStatus } from "@/api/queries";
+import { useFilePage, useJobs, useReview, useSources, useStatus } from "@/api/queries";
 import { Icon, type IconName } from "@/components/Icon";
 import { ActivityPanel } from "@/features/jobs/ActivityPanel";
 import { ReviewPanel } from "@/features/review/ReviewPanel";
@@ -38,7 +38,7 @@ function StatusCards() {
         <div className="grow">
           <div className="title">Voice {voice.speech_available ? "ready" : "not set up"}</div>
           <div className="sub ellipsis">
-            {voice.speech_available ? (voice.microphone ? "Hold Ctrl+Space to talk" : "No microphone found") : voice.speech_downloadable ? `Download speech model (${voice.speech_size_mb} MB)` : "Type labels instead"}
+            {voice.speech_available ? (voice.microphone ? "Hold Ctrl+Space · any language" : "No microphone found") : voice.speech_downloadable ? `Download speech model (${voice.speech_size_mb} MB)` : "Type labels instead"}
           </div>
         </div>
         <Icon name="chevronRight" size={14} className="muted" />
@@ -50,6 +50,7 @@ function StatusCards() {
 export function Sidebar() {
   const tab = ui.use((s) => s.leftTab);
   const { data: sources } = useSources();
+  const { data: files } = useFilePage("", 0); // same count as the Files list (incl. metadata-only)
   const { data: review } = useReview();
   const { data: jobs } = useJobs();
   const reviewCount = review ? review.total_proposed + review.merge_suggestions.length + review.flagged.length + review.conflicts.length : 0;
@@ -58,7 +59,7 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <nav className="nav">
-        <NavItem id="sources" icon="folder" label="Library" count={sources?.length} muted />
+        <NavItem id="sources" icon="folder" label="Library" count={files?.total ?? sources?.length} muted />
         <NavItem id="review" icon="inbox" label="Review" count={reviewCount} />
         <NavItem id="activity" icon="activity" label="Activity" count={busy || failed} muted={!failed} />
       </nav>

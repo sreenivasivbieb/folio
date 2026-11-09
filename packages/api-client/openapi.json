@@ -2430,6 +2430,48 @@
         }
       }
     },
+    "/api/voice/focus": {
+      "post": {
+        "tags": [
+          "labels"
+        ],
+        "summary": "Voice Focus",
+        "description": "The UI reports its selection, so a desktop hotkey (which knows nothing about the UI)\nlabels the right thing.",
+        "operationId": "voice_focus_api_voice_focus_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Target"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/voice/toggle": {
       "post": {
         "tags": [
@@ -2577,6 +2619,59 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Label"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/labels/{label_id}/transcript": {
+      "post": {
+        "tags": [
+          "labels"
+        ],
+        "summary": "Revise Transcript",
+        "description": "Correct a misheard transcript in the preview; the label is re-planned.",
+        "operationId": "revise_transcript_api_labels__label_id__transcript_post",
+        "parameters": [
+          {
+            "name": "label_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Label Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TranscriptBody"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -6022,6 +6117,19 @@
           "entities"
         ],
         "title": "TimelineView"
+      },
+      "TranscriptBody": {
+        "properties": {
+          "transcript": {
+            "type": "string",
+            "title": "Transcript"
+          }
+        },
+        "type": "object",
+        "required": [
+          "transcript"
+        ],
+        "title": "TranscriptBody"
       },
       "TypedLabel": {
         "properties": {

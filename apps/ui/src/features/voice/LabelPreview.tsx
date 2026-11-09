@@ -24,6 +24,38 @@ function OtherType({ onPick }: { onPick: (v: string) => void }) {
   );
 }
 
+/** The transcript is always visible and editable: fix a misheard name, then re-check. */
+function Transcript({ label, actions }: { label: Label; actions: ReturnType<typeof useLabelActions> }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(label.transcript);
+  useEffect(() => setDraft(label.transcript), [label.transcript]);
+  const save = () => {
+    if (draft.trim() && draft.trim() !== label.transcript) actions.revise.mutate({ id: label.id, transcript: draft.trim() });
+    setEditing(false);
+  };
+  if (editing) {
+    return (
+      <div className="row" style={{ marginBottom: 14 }}>
+        <input className="input grow" autoFocus value={draft} onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }} />
+        <button type="button" className="btn primary sm" onClick={save}><Icon name="refresh" size={13} /> Re-check</button>
+      </div>
+    );
+  }
+  return (
+    <div className="row" style={{ alignItems: "flex-start", gap: 10, marginBottom: 14 }}>
+      <Icon name="quote" size={16} className="muted" style={{ marginTop: 2 }} />
+      <div className="grow" style={{ fontSize: 14, lineHeight: 1.5 }}>
+        {label.transcript}
+        {label.audio_path && <div className="tiny muted" style={{ marginTop: 2 }}>Heard by the speech model — misheard a name? Edit it.</div>}
+      </div>
+      <button type="button" className="btn ghost sm" onClick={() => setEditing(true)} title="Correct the transcript">
+        {actions.revise.isPending ? <Icon name="loader" size={13} spin /> : <Icon name="pencil" size={13} />} Edit
+      </button>
+    </div>
+  );
+}
+
 export function LabelPreview({ label, actions }: { label: Label; actions: ReturnType<typeof useLabelActions> }) {
   const plan = label.parsed as unknown as LabelPlan;
   const ready = plan.questions.length === 0 && plan.ops.length > 0;
@@ -51,10 +83,7 @@ export function LabelPreview({ label, actions }: { label: Label; actions: Return
         </>
       }
     >
-      <div className="row" style={{ alignItems: "flex-start", gap: 10, marginBottom: 14 }}>
-        <Icon name="quote" size={16} className="muted" style={{ marginTop: 2 }} />
-        <div style={{ fontSize: 14, lineHeight: 1.5 }}>{label.transcript}</div>
-      </div>
+      <Transcript label={label} actions={actions} />
       {plan.preview.map((line) => (
         <div key={line} className="preview-line"><Icon name="plus" size={13} style={{ color: "var(--ok)" }} />{line}</div>
       ))}

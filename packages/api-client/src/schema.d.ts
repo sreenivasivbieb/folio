@@ -791,6 +791,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/voice/focus": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Voice Focus
+         * @description The UI reports its selection, so a desktop hotkey (which knows nothing about the UI)
+         *     labels the right thing.
+         */
+        post: operations["voice_focus_api_voice_focus_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/voice/toggle": {
         parameters: {
             query?: never;
@@ -844,6 +865,26 @@ export interface paths {
         get: operations["get_label_api_labels__label_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/labels/{label_id}/transcript": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revise Transcript
+         * @description Correct a misheard transcript in the preview; the label is re-planned.
+         */
+        post: operations["revise_transcript_api_labels__label_id__transcript_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2079,6 +2120,11 @@ export interface components {
             entities: {
                 [key: string]: components["schemas"]["EntityNode"];
             };
+        };
+        /** TranscriptBody */
+        TranscriptBody: {
+            /** Transcript */
+            transcript: string;
         };
         /** TypedLabel */
         TypedLabel: {
@@ -3645,6 +3691,39 @@ export interface operations {
             };
         };
     };
+    voice_focus_api_voice_focus_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Target"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ok"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     voice_toggle_api_voice_toggle_post: {
         parameters: {
             query?: never;
@@ -3752,6 +3831,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Label"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revise_transcript_api_labels__label_id__transcript_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                label_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TranscriptBody"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

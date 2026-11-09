@@ -30,7 +30,8 @@ def run_sandboxed(parser_name: str, path: Path, timeout_s: int, memory_mb: int) 
                parser_name, str(path), str(memory_mb)]
     env = {k: v for k, v in os.environ.items() if k in _ENV_KEEP}
     try:
-        proc = subprocess.run(cmd, capture_output=True, timeout=timeout_s, env=env)
+        flags = 0x08000000 if sys.platform == "win32" else 0  # CREATE_NO_WINDOW: no console flash
+        proc = subprocess.run(cmd, capture_output=True, timeout=timeout_s, env=env, creationflags=flags)
     except subprocess.TimeoutExpired as exc:
         raise ParseError(f"parser timed out after {timeout_s}s") from exc
     if proc.returncode != 0:

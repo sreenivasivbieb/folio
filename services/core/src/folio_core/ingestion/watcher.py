@@ -17,6 +17,7 @@ from .service import IngestionService
 log = logging.getLogger(__name__)
 
 DEBOUNCE_S = 1.5
+CONTENT_EVENTS = frozenset({"created", "modified", "moved", "deleted", "closed"})  # closed = after a write
 
 
 class FolderWatcher:
@@ -51,7 +52,10 @@ class FolderWatcher:
 
         class Handler(FileSystemEventHandler):
             def on_any_event(self, event):  # type: ignore[no-untyped-def]
-                if event.is_directory:
+                # Only content changes. Linux also reports "opened"/"closed_no_write" when a file
+                # is merely *read* — including by our own parser — which used to re-queue the file
+                # forever (index -> read event -> re-index -> ...).
+                if event.is_directory or event.event_type not in CONTENT_EVENTS:
                     return
                 for attr in ("src_path", "dest_path"):
                     p = getattr(event, attr, None)

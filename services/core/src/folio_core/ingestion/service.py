@@ -249,8 +249,8 @@ class IngestionService:
             if src.status == SourceStatus.FORGOTTEN:
                 return 0  # the user asked us to forget this file
             if (src.size == st.st_size and src.mtime == st.st_mtime
-                    and src.status in (SourceStatus.INDEXED, SourceStatus.METADATA)):
-                return 0
+                    and src.status in (SourceStatus.INDEXED, SourceStatus.METADATA, SourceStatus.INDEXING)):
+                return 0  # nothing changed (an index job already in flight sees the same file)
             self.kdb["sources"].update_one({"_id": src_id}, {
                 "$set": {"root_id": root_id, "status": SourceStatus.PENDING.value if found else SourceStatus.METADATA.value,
                          "size": st.st_size, "mtime": st.st_mtime, "error": None, "updated_at": now},
@@ -348,7 +348,9 @@ class IngestionService:
             return run_sandboxed(parser.name, path, self.settings.parse_timeout_s, self.settings.parse_memory_mb)
         return parser.parse(path, ParseContext(
             transcriber=self.transcriber, vocabulary_prompt=self.vocabulary(),
-            extra={"progress": lambda f, m: self.queue.progress(job.id, f * 0.95, m)},
+            extra={"progress": lambda f, m: self.queue.progress(job.id, f * 0.95, m),
+                   "timeout_s": max(self.settings.parse_timeout_s, 1800),
+                   "memory_mb": max(self.settings.parse_memory_mb, 4096)},
         ))
 
     def _has_chunks(self, source_id: str) -> bool:

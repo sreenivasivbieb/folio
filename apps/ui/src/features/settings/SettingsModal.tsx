@@ -5,6 +5,7 @@ import { useAction, useJobs, useLlmSettings, useSchema, useSettingsActions, useS
 import { Icon, type IconName } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
 import { EXPORT_FORMATS, exportFile } from "@/features/export/exportFile";
+import { platform } from "@/lib/format";
 import { type SettingsTab, ui } from "@/state/selection";
 import { toast } from "@/state/toast";
 import { DriveTab } from "./DriveTab";
@@ -172,6 +173,7 @@ function VoiceTab() {
   const { data: jobs } = useJobs();
   const actions = useSettingsActions();
   const voice = status?.voice;
+  const os = platform();
   const download = jobs?.find((j) => j.kind === "download_speech_model" && (j.status === "running" || j.status === "queued"));
   const failed = jobs?.find((j) => j.kind === "download_speech_model" && j.status === "failed");
   return (
@@ -203,11 +205,23 @@ function VoiceTab() {
         <Icon name="mic" />
         <div><b>Microphone {voice?.microphone ? "found" : "unavailable"}</b><div className="small text-2">{voice?.microphone_detail}</div></div>
       </div>
+      <div className="callout">
+        <Icon name="info" />
+        <span>Speak in any language — Hindi, Hinglish, English. Labels are translated to English on this computer, then
+          shown for you to check; you can edit the text if a name was misheard.</span>
+      </div>
       <div className="field">
         <label>Push-to-talk</label>
-        <div className="small text-2">Hold <span className="kbd">Ctrl</span> + <span className="kbd">Space</span> in the app, or <span className="kbd">Ctrl</span> + <span className="kbd">Alt</span> + <span className="kbd">Space</span> anywhere (Windows, macOS, X11).</div>
-        <div className="small text-2">On Wayland (Hyprland), bind a key yourself:</div>
-        <div className="excerpt mono">bind = SUPER, V, exec, folio-core voice toggle</div>
+        <div className="small text-2">Hold <span className="kbd">Ctrl</span> + <span className="kbd">Space</span> while Folio is focused, or the mic button.</div>
+        {os === "linux" ? (
+          <>
+            <div className="small text-2">Anywhere: <span className="kbd">Ctrl</span> + <span className="kbd">Alt</span> + <span className="kbd">Space</span> on X11. On Wayland (GNOME, KDE, Hyprland) apps cannot grab global keys — bind one in your desktop's shortcut settings to:</div>
+            <div className="excerpt mono">folio-core voice toggle</div>
+            <div className="tiny muted">Hyprland example: <span className="mono">bind = SUPER, V, exec, folio-core voice toggle</span></div>
+          </>
+        ) : (
+          <div className="small text-2">Anywhere: hold <span className="kbd">Ctrl</span> + <span className="kbd">Alt</span> + <span className="kbd">Space</span>, even when Folio is in the background.</div>
+        )}
       </div>
     </div>
   );

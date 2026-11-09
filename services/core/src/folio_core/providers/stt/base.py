@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+import numpy as np
+
 Progress = Callable[[float], None]  # fraction 0..1
 
 
@@ -26,9 +28,10 @@ class Transcriber(Protocol):
         ...
 
     def transcribe(
-        self, audio_path: Path, language: str | None = None, prompt: str | None = None,
-        on_progress: Progress | None = None,
+        self, audio: Path | np.ndarray, language: str | None = None, prompt: str | None = None,
+        on_progress: Progress | None = None, task: str = "transcribe", beam_size: int = 5,
     ) -> list[Segment]:
-        """``prompt`` carries the personal vocabulary (verified names) to bias recognition.
+        """``audio`` is a file or 16 kHz mono float32 samples. ``prompt`` carries the personal
+        vocabulary (verified names) to bias recognition. ``task="translate"`` returns English.
         Never downloads anything: models are fetched only by an explicit download job."""
         ...

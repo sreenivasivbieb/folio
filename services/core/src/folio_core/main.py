@@ -25,7 +25,16 @@ READY_PREFIX = "FOLIO_READY "
 
 def _pid_alive(pid: int) -> bool:
     if sys.platform == "win32":  # os.kill(pid, 0) would *terminate* the process on Windows
-        return True
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x00100000, False, pid)  # SYNCHRONIZE
+        if not handle:
+            return False
+        try:
+            return kernel32.WaitForSingleObject(handle, 0) == 0x00000102  # WAIT_TIMEOUT = running
+        finally:
+            kernel32.CloseHandle(handle)
     try:
         os.kill(pid, 0)
         return True
@@ -153,6 +162,10 @@ def cli(argv: list[str] | None = None) -> int:
         from .ingestion.sandbox import child_main
 
         return child_main(argv[1:])
+    if argv[:1] == ["decode-audio"]:  # ... and here for sandboxed audio/video decoding
+        from .providers.stt.audio import child_main as decode_main
+
+        return decode_main(argv[1:])
 
     p = argparse.ArgumentParser(prog="folio-core", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)

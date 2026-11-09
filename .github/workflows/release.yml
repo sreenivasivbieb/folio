@@ -1,17 +1,31 @@
-# Installers for Windows, macOS and Linux: PyInstaller sidecar + Tauri bundle.
-# Phase 0 spike (proposal: "Packaging a Python sidecar on three operating systems") — run it
-# manually and inspect the artifacts before trusting it for users.
-name: Release (spike)
+# Native installers: Windows (.exe NSIS + .msi) and Linux (AppImage + .deb + .rpm).
+# Each runner builds its own PyInstaller core (speech, audio decoding and PortAudio included),
+# then Tauri bundles it next to the app. Run manually, or push a tag like v0.3.0 to attach the
+# installers to a draft GitHub release. The Omarchy/Arch package is built by
+# scripts/build-omarchy.sh.
+name: Release
 
 on:
   workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
 
 jobs:
   bundle:
+    name: ${{ matrix.name }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-latest, windows-latest]
+        include:
+          - name: Linux (AppImage, deb, rpm)
+            os: ubuntu-22.04
+            bundles: appimage,deb,rpm
+          - name: Windows (exe, msi)
+            os: windows-latest
+            bundles: nsis,msi
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -23,15 +37,52 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+            libxdo-dev libportaudio2 portaudio19-dev libfuse2 file
       - run: npm ci
-      - name: Build core sidecar binary
+      - name: Build the core (PyInstaller)
         shell: bash
         run: scripts/build-sidecar.sh
+      - name: Smoke-test the bundled core
+        shell: bash
+        run: |
+          BIN=$(ls apps/desktop/src-tauri/binaries/folio-core-*)
+          DATA=$(mktemp -d)
+          FOLIO_TOKEN=ci FOLIO_DATA_DIR="$DATA" "$BIN" serve --port 8899 > core.out 2> core.err &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8899/api/health && break; sleep 1; done
+          curl -sf -H "Authorization: Bearer ci" http://127.0.0.1:8899/api/status | tee status.json
+          grep -q '"microphone"' status.json
       - name: Build installers
         working-directory: apps/desktop
-        run: npx tauri build --config src-tauri/tauri.release.conf.json
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: npx tauri build --config src-tauri/tauri.release.conf.json --bundles ${{ matrix.bundles }}
+      - name: Checksums
+        shell: bash
+        run: |
+          cd apps/desktop/src-tauri/target/release/bundle
+          find . -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*.exe' -o -name '*.msi' \) \
+            -exec sha256sum {} \; > SHA256SUMS-${{ runner.os }}.txt
+          cat SHA256SUMS-${{ runner.os }}.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: folio-${{ matrix.os }}
-          path: apps/desktop/src-tauri/target/release/bundle/
+          name: folio-${{ runner.os }}
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/**/*.AppImage
+            apps/desktop/src-tauri/target/release/bundle/**/*.deb
+            apps/desktop/src-tauri/target/release/bundle/**/*.rpm
+            apps/desktop/src-tauri/target/release/bundle/**/*.exe
+            apps/desktop/src-tauri/target/release/bundle/**/*.msi
+            apps/desktop/src-tauri/target/release/bundle/SHA256SUMS-*.txt
+      - name: Attach to draft release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            apps/desktop/src-tauri/target/release/bundle/**/*.AppImage
+            apps/desktop/src-tauri/target/release/bundle/**/*.deb
+            apps/desktop/src-tauri/target/release/bundle/**/*.rpm
+            apps/desktop/src-tauri/target/release/bundle/**/*.exe
+            apps/desktop/src-tauri/target/release/bundle/**/*.msi
+            apps/desktop/src-tauri/target/release/bundle/SHA256SUMS-*.txt

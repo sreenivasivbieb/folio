@@ -1,7 +1,6 @@
 """NFR reliability: crash-safe storage and resumable jobs (forced kill, tested)."""
 
 import os
-import signal
 import subprocess
 import sys
 import textwrap
@@ -34,7 +33,7 @@ def test_forced_kill_loses_no_committed_data(tmp_path: Path):
                             env={**os.environ, "PYTHONPATH": str(tests_dir.parent)})
     assert proc.stdout.readline().strip() == b"ready"
     time.sleep(1.5)
-    proc.send_signal(signal.SIGKILL)  # no cleanup, no commit of an in-flight transaction
+    proc.kill()  # SIGKILL on Linux, TerminateProcess on Windows: no cleanup, no commit in flight
     proc.wait()
 
     c = make_container(tmp_path, db_name=db)  # dropped again by the fixture

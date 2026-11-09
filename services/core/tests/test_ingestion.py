@@ -102,3 +102,24 @@ def test_forget_file_removes_unverified_and_flags_verified(container, files):
     # a forgotten file is never re-indexed by later scans
     container.ingestion.rescan_all()
     assert repo.get_source(conn, src.id).status == SourceStatus.FORGOTTEN
+
+
+def test_reading_a_file_never_requeues_it(container, files):
+    """Regression: inotify 'opened'/'closed_no_write' events caused by our own parser used to
+    re-queue the file it was indexing, forever."""
+
+    from folio_core.ingestion.watcher import CONTENT_EVENTS
+
+    assert {"opened", "closed_no_write"}.isdisjoint(CONTENT_EVENTS)
+    container.ingestion.add_root(str(files / "meeting-notes.md"))
+    scan = container.queue.claim()
+    assert scan.kind == "scan_root"
+    container.workers._run(scan)  # discovers the file and queues its index job
+    job = container.queue.claim()  # the index job is running ...
+    assert job.kind == "index_source"
+    src = repo.list_sources(container.kdb)[0]
+    repo.set_source_status(container.kdb, src.id, SourceStatus.INDEXING)
+    container.ingestion.scan_path(files / "meeting-notes.md")  # ... and a rescan/watch event arrives
+    row = container.index.reader().execute("SELECT rerun FROM jobs WHERE id = ?", (job.id,)).fetchone()
+    assert row["rerun"] == 0
+

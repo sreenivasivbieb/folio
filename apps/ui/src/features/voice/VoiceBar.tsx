@@ -3,7 +3,8 @@
  * preview. Typing goes through exactly the same pipeline. The target is the current selection: a
  * file, entities, or facts ("this is wrong, the owner is Priya").
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useApi } from "@/api/client";
 import { inTauri } from "@/api/connection";
 import { useLabelActions, useSources, useStatus } from "@/api/queries";
 import { Icon } from "@/components/Icon";
@@ -38,20 +39,43 @@ export function VoiceBar() {
   const { data: status } = useStatus();
   const { data: sources } = useSources();
   const [text, setText] = useState("");
+  const [startedAt, setStartedAt] = useState(0);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!recording) return;
+    const t = window.setInterval(() => tick((n) => n + 1), 250);
+    return () => window.clearInterval(t);
+  }, [recording]);
+  const { client } = useApi();
   const actions = useLabelActions((l) => ui.set({ label: l }));
+  const transcribing = actions.stop.isPending;
   const voice = status?.voice;
   const canSpeak = !!voice?.speech_available && !!voice?.microphone;
   const sourceName = (id: string) => basename(sources?.find((s) => s.id === id)?.path ?? id);
   const target = describe(selection, sourceName);
 
+  // A quick tap must never leave the microphone running: stop waits for start to finish.
+  const pendingStart = useRef<Promise<unknown> | null>(null);
   const start = () => {
     if (!canSpeak || ui.get().recording) return;
     ui.set({ recording: true });
-    actions.start.mutate(labelTarget(ui.get().selection), { onError: () => ui.set({ recording: false }) });
+    setStartedAt(Date.now());
+    pendingStart.current = actions.start.mutateAsync(labelTarget(ui.get().selection)).catch((e) => {
+      ui.set({ recording: false });
+      throw e;
+    });
   };
-  const stop = () => {
+  const stop = async () => {
     if (!ui.get().recording) return;
     ui.set({ recording: false });
+    const started = pendingStart.current;
+    pendingStart.current = null;
+    if (!started) return;
+    try {
+      await started;
+    } catch {
+      return; // starting failed (already reported)
+    }
     actions.stop.mutate(undefined);
   };
   const submit = () => {
@@ -60,12 +84,21 @@ export function VoiceBar() {
     setText("");
   };
 
+  // Tell the core what is selected, so a desktop hotkey bound to `folio-core voice toggle`
+  // (Wayland) labels the same thing the mic button would.
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      void client.POST("/api/voice/focus", { body: labelTarget(selection) });
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [selection, client]);
+
   // Global hotkey (Ctrl+Alt+Space) from the desktop shell: hold to talk even when unfocused.
   useEffect(() => {
     if (!inTauri) return;
     let unlisten: (() => void) | undefined;
     void import("@tauri-apps/api/event").then(({ listen }) =>
-      listen<boolean>("folio://push-to-talk", (e) => (e.payload ? start() : stop())).then((u) => {
+      listen<boolean>("folio://push-to-talk", (e) => (e.payload ? start() : void stop())).then((u) => {
         unlisten = u;
       }),
     );
@@ -80,7 +113,7 @@ export function VoiceBar() {
       }
     };
     const up = (e: KeyboardEvent) => {
-      if (e.code === "Space" || e.key === "Control") stop();
+      if (e.code === "Space" || e.key === "Control") void stop();
     };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
@@ -98,19 +131,27 @@ export function VoiceBar() {
           className={`ptt ${recording ? "recording" : ""}`}
           disabled={!canSpeak}
           title={canSpeak ? "Hold to talk (Ctrl+Space)" : "Voice is not set up — open Settings → Voice"}
-          onPointerDown={start}
-          onPointerUp={stop}
-          onPointerLeave={stop}
+          onPointerDown={(e) => {
+            e.currentTarget.setPointerCapture(e.pointerId); // keep the press even if the pointer drifts
+            start();
+          }}
+          onPointerUp={() => void stop()}
+          onPointerCancel={() => void stop()}
           aria-label="Push to talk"
         >
-          <Icon name="mic" size={17} />
+          {transcribing ? <Icon name="loader" size={17} spin /> : <Icon name="mic" size={17} />}
         </button>
         <span className={`target-chip ${target ? "set" : ""}`} title="Labels apply to the current selection">
           <Icon name={selection.kind === "source" ? "file" : selection.kind === "none" ? "info" : "layers"} size={12} />
           <span className="ellipsis">{target ?? "Nothing selected"}</span>
         </span>
         <input
-          placeholder={recording ? "Listening… release to preview" : EXAMPLES[selection.kind]}
+          placeholder={
+            recording
+              ? `Listening… ${Math.max(0, Math.floor((Date.now() - startedAt) / 1000))}s — release to preview`
+              : transcribing ? "Understanding what you said…" : EXAMPLES[selection.kind]
+          }
+          disabled={recording || transcribing}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}

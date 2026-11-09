@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { basename, confidenceBand, locatorLabel, seconds } from "./format";
+import { basename, confidenceBand, fileSize, locatorLabel, seconds } from "./format";
 
 describe("format", () => {
   it("formats locators the way evidence links show them", () => {
@@ -15,5 +15,8 @@ describe("format", () => {
     expect(basename("C:\\docs\\x.md")).toBe("x.md");
     expect(confidenceBand(0.9)).toBe("high");
     expect(confidenceBand(0.45)).toBe("low");
+    expect(fileSize(512)).toBe("512 B");
+    expect(fileSize(4300)).toBe("4.2 KB");
+    expect(fileSize(3_984_588)).toBe("3.8 MB");
   });
 });

@@ -7,16 +7,21 @@ on:
 
 jobs:
   core:
-    name: Core (Python)
-    runs-on: ubuntu-latest
+    name: Core (Python, ${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - name: System tools for parsers
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg tesseract-ocr
-      - name: Install
+      - name: System tools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg tesseract-ocr libportaudio2
+      - name: Install (with speech support, as shipped)
         working-directory: services/core
-        run: uv sync
+        run: uv sync --extra speech
       - name: Lint
         working-directory: services/core
         run: uv run ruff check src tests

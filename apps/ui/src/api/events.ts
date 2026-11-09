@@ -5,7 +5,7 @@
 import { authedUrl } from "@folio/api-client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { setVoiceRecording } from "@/state/selection";
+import { setVoiceRecording, ui } from "@/state/selection";
 import { useApi } from "./client";
 
 type CoreEvent =
@@ -19,7 +19,7 @@ type CoreEvent =
 const KNOWLEDGE_KEYS = ["entities", "card", "claims", "claim", "claimHistory", "graph", "timeline", "swimlane", "review", "history", "search", "schema", "status"];
 
 export function useCoreEvents(): void {
-  const { conn } = useApi();
+  const { conn, client } = useApi();
   const qc = useQueryClient();
 
   useEffect(() => {
@@ -56,6 +56,14 @@ export function useCoreEvents(): void {
           break;
         case "review":
           schedule("review");
+          break;
+        case "label":
+          // A label recorded via a desktop hotkey or `folio-core voice toggle` must still open
+          // its preview here (labels started from this window are already shown).
+          if (ui.get().label?.id !== ev.label_id) {
+            void client.GET("/api/labels/{label_id}", { params: { path: { label_id: ev.label_id } } })
+              .then((r) => { if (r.data?.status === "preview") ui.set({ label: r.data }); });
+          }
           break;
         default:
           break;

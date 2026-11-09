@@ -99,6 +99,10 @@ class TypedLabel(Target):
     transcript: str
 
 
+class TranscriptBody(BaseModel):
+    transcript: str
+
+
 class AnswerBody(BaseModel):
     question_id: str
     value: str
