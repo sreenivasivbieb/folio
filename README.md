@@ -81,7 +81,7 @@ The build writes these files to `artifacts/`:
 
 | File | Purpose |
 | --- | --- |
-| `folio-0.2.0-1-x86_64.pkg.tar.zst` | Arch package with launcher entry and runtime dependencies |
+| `folio-desktop-0.2.0-1-x86_64.pkg.tar.zst` | Arch package with launcher entry and runtime dependencies |
 | `folio-omarchy-x86_64.tar.zst` | Portable desktop app and bundled core service |
 | `SHA256SUMS` | Checksums for both artifacts |
 
@@ -91,7 +91,7 @@ From the `artifacts/` folder:
 
 ```bash
 sha256sum --check SHA256SUMS
-sudo pacman -U ./folio-0.2.0-1-x86_64.pkg.tar.zst
+sudo pacman -U ./folio-desktop-0.2.0-1-x86_64.pkg.tar.zst
 folio
 ```
 

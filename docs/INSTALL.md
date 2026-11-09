@@ -3,7 +3,7 @@
 Install the downloadable Arch x86_64 package:
 
 ```bash
-sudo pacman -U ./folio-0.2.0-1-x86_64.pkg.tar.zst
+sudo pacman -U ./folio-desktop-0.2.0-1-x86_64.pkg.tar.zst
 ```
 
 Open **Folio** in the Omarchy launcher (`Super+Space`) or run `folio` from any folder.
@@ -59,7 +59,7 @@ bundled, but its Whisper model downloads only after **Settings → Voice → Dow
 
 For a portable run, extract `folio-omarchy-x86_64.tar.zst` and run
 `./folio-omarchy/folio`. Keep `folio-core` beside it; the same Linux runtime libraries are
-required. Uninstalling with `sudo pacman -R folio` retains all app data and originals.
+required. Uninstalling with `sudo pacman -R folio-desktop` retains all app data and originals.
 
 To build, run `bash scripts/build-omarchy.sh` with Rust, Node, uv, `base-devel`, GTK3,
 `webkit2gtk-4.1` and `portaudio` available. It builds an Arch package and portable archive

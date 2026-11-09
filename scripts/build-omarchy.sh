@@ -33,8 +33,8 @@ pkg.write_text(pkg.read_text().replace("sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 
                                      'sha256sums=(' + ' '.join(repr(s) for s in sums) + ')'))
 PY
 (cd "$FOLIO_STAGE" && makepkg --force --nodeps --nocheck)
-cp "$FOLIO_STAGE/folio-0.2.0-1-x86_64.pkg.tar.zst" artifacts/
+cp "$FOLIO_STAGE/folio-desktop-0.2.0-1-x86_64.pkg.tar.zst" artifacts/
 tar --zstd -cf artifacts/folio-omarchy-x86_64.tar.zst -C artifacts \
   folio-omarchy/folio folio-omarchy/folio-core folio-omarchy/folio.png folio-omarchy/INSTALL.md
-(cd artifacts && sha256sum folio-0.2.0-1-x86_64.pkg.tar.zst folio-omarchy-x86_64.tar.zst > SHA256SUMS)
-echo "Built artifacts/folio-0.2.0-1-x86_64.pkg.tar.zst and artifacts/folio-omarchy-x86_64.tar.zst"
+(cd artifacts && sha256sum folio-desktop-0.2.0-1-x86_64.pkg.tar.zst folio-omarchy-x86_64.tar.zst > SHA256SUMS)
+echo "Built artifacts/folio-desktop-0.2.0-1-x86_64.pkg.tar.zst and artifacts/folio-omarchy-x86_64.tar.zst"

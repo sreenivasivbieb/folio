@@ -1,5 +1,6 @@
 # Local binary package. scripts/build-omarchy.sh stages and checksums its exact inputs.
-pkgname=folio
+pkgname=folio-desktop
+conflicts=('folio')  # the unrelated AUR GNOME notes app 'folio' would otherwise replace this one
 pkgver=0.2.0
 pkgrel=1
 pkgdesc='Local document knowledge organizer with computer and drive scanning'

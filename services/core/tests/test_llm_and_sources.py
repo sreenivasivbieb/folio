@@ -121,7 +121,8 @@ def test_media_waits_for_the_speech_model_instead_of_downloading(tmp_path):
     c.ingestion.add_root(str(audio))
     drain(c)
     src = repo.list_sources(c.kdb)[0]
-    assert src.status.value == "failed" and "speech model not downloaded" in src.error
+    assert src.status.value == "pending" and "speech model not downloaded" in src.error  # waits, not an error
+    assert not c.queue.list("failed")
     assert c.labels.status()["speech_available"] is False
 
 
