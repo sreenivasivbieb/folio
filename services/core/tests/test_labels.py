@@ -233,3 +233,21 @@ def test_search_by_topic_finds_labelled_files(container, pdf_source):
     files = container.search.files("finance", ents)
     assert [f["source_id"] for f in files] == [pdf_source.id]
     assert container.search.search("quantum chromodynamics") == []  # no random vector neighbours
+
+
+def test_slow_model_falls_back_to_rules_quickly(container, pdf_source, monkeypatch):
+    import time
+
+    from folio_core.speech.llm_label_parser import LLMLabelParser
+
+    class Slow(_LabelModel):
+        def complete_json(self, *a):
+            time.sleep(2)
+            return "{}"
+
+    monkeypatch.setattr(LLMLabelParser, "timeout_s", 0.3)
+    container.labels.llm = Slow("")
+    started = time.monotonic()
+    plan = container.labels.preview("tag this as finance", "source", [pdf_source.id]).parsed
+    assert time.monotonic() - started < 1.5
+    assert plan["engine"].startswith("rules (model too slow")

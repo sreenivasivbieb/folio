@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 import logging
+import time
 import wave
 from pathlib import Path
 from typing import Any
@@ -51,6 +52,30 @@ def _is_speech(seg: dict[str, Any]) -> bool:
 
 class CloudWhisper:
     size_mb = 0
+    attempts = 5  # free tiers rate-limit audio (e.g. a few requests per minute): wait and retry
+
+    def _post(self, client: Any, path: str, form: dict[str, str], data: bytes) -> Any:
+        from ..llm.openai_compat import retry_after
+
+        delay = 3.0
+        for attempt in range(self.attempts):
+            try:
+                resp = client._client.post(f"{client.base_url}/{path}", data=form,
+                                           files={"file": ("audio.wav", data, "audio/wav")})
+            except Exception as exc:
+                if attempt == self.attempts - 1:
+                    raise Unavailable(f"could not reach the speech service: {exc}") from exc
+                time.sleep(delay)
+                delay *= 2
+                continue
+            if resp.status_code in (429, 500, 502, 503, 504) and attempt < self.attempts - 1:
+                wait = min(retry_after(resp.headers.get("retry-after"), delay), 60)
+                log.info("speech service busy (HTTP %s); retrying in %.0fs", resp.status_code, wait)
+                time.sleep(wait)
+                delay *= 2
+                continue
+            return resp
+        return resp
 
     def __init__(self, llm: Any) -> None:  # ConfiguredLLM
         self.llm = llm
@@ -91,11 +116,7 @@ class CloudWhisper:
                 form["prompt"] = prompt[:800]
             if language and task != "translate":
                 form["language"] = language
-            try:
-                resp = client._client.post(f"{client.base_url}/{path}", data=form,
-                                           files={"file": ("audio.wav", data, "audio/wav")})
-            except Exception as exc:
-                raise Unavailable(f"could not reach the speech service: {exc}") from exc
+            resp = self._post(client, path, form, data)
             if resp.status_code >= 400:
                 raise Unavailable(f"speech service returned HTTP {resp.status_code}: {resp.text[:200]}")
             body = resp.json()

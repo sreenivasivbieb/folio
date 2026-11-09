@@ -240,7 +240,7 @@ class IngestionService:
             self._track(path, root.id, PRIORITY_WATCH_CHANGE)
         elif not path.exists():
             src = repo.source_by_path(self.kdb, str(path))
-            if src and src.status not in (SourceStatus.FORGOTTEN, SourceStatus.REMOVED):
+            if src and src.status not in (SourceStatus.FORGOTTEN, SourceStatus.REMOVED, SourceStatus.TRASHED):
                 repo.set_source_status(self.kdb, src.id, SourceStatus.MISSING)
                 self._changed(src.id)
 
@@ -270,8 +270,8 @@ class IngestionService:
             })
         else:
             src_id = src.id
-            if src.status == SourceStatus.FORGOTTEN:
-                return 0  # the user asked us to forget this file
+            if src.status in (SourceStatus.FORGOTTEN, SourceStatus.TRASHED):
+                return 0  # the user forgot or trashed this file
             if (src.size == st.st_size and src.mtime == st.st_mtime
                     and src.status in (SourceStatus.INDEXED, SourceStatus.METADATA, SourceStatus.INDEXING)):
                 return 0  # nothing changed (an index job already in flight sees the same file)
@@ -301,7 +301,8 @@ class IngestionService:
     def index_source(self, job: Job) -> str:
         with self.kdb._write_lock:
             src = repo.get_source(self.kdb, job.payload["source_id"])
-            if src is None or src.status in (SourceStatus.FORGOTTEN, SourceStatus.REMOVED, SourceStatus.METADATA):
+            if src is None or src.status in (SourceStatus.FORGOTTEN, SourceStatus.REMOVED, SourceStatus.METADATA,
+                                             SourceStatus.TRASHED):
                 return "skipped: source no longer tracked or has metadata only"
             repo.set_source_status(self.kdb, src.id, SourceStatus.INDEXING)
         path = Path(src.path)

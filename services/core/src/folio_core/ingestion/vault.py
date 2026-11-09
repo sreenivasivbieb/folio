@@ -108,10 +108,17 @@ class Vault:
                 origin = src.resolve()
                 dest = self.dir / uuid.uuid4().hex / src.name
                 dest.parent.mkdir(parents=True)
-                if mode == "move":
-                    shutil.move(str(src), str(dest))  # rename on one disk; copy + delete across disks
-                else:
-                    shutil.copy2(src, dest)
+                try:
+                    if mode == "move":
+                        shutil.move(str(src), str(dest))  # rename on one disk; copy + delete across disks
+                    else:
+                        shutil.copy2(src, dest)
+                except OSError:
+                    # Disk full, unplugged drive...: drop the partial copy. If the original is
+                    # gone the move did complete (only cleanup failed), so keep the stored file.
+                    if src.exists():
+                        shutil.rmtree(dest.parent, ignore_errors=True)
+                    raise
                 if folder is not None:
                     folders.add(folder)
                 self.ingestion._track(dest, root.id, PRIORITY_SELECTED_FILE)

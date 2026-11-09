@@ -79,3 +79,30 @@ def test_startup_rescan_sees_vault_files(container, tmp_path):
     container.ingestion.rescan_all()
     drain(container)
     assert repo.get_source(container.kdb, stored.id).status.value == "missing"
+
+
+def test_queued_indexing_never_revives_a_trashed_file(container, tmp_path):
+    f = tmp_path / "late.txt"
+    f.write_text("otters and kites")
+    container.vault.import_paths([str(f)], "move")  # its index job is queued, not run yet
+    sid = _vault_files(container)[0].id
+    container.vault.trash(sid)
+    drain(container)  # the stale job runs now
+    assert repo.get_source(container.kdb, sid).status.value == "trashed"
+    assert not container.search.search("otters")
+
+
+def test_failed_copy_leaves_no_partial_file(container, tmp_path, monkeypatch):
+    import shutil
+
+    f = tmp_path / "big.txt"
+    f.write_text("data")
+
+    def disk_full(src, dst, *a, **k):
+        Path(dst).write_text("partial")
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(shutil, "copy2", disk_full)
+    stats = container.vault.import_paths([str(f)], "copy")
+    assert stats["failed"] == 1 and f.exists()
+    assert not [p for p in container.vault.dir.rglob("*") if p.is_file()]

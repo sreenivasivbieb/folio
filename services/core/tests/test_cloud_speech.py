@@ -66,3 +66,20 @@ def test_silence_and_noise_do_not_become_labels():
     assert not _is_speech({"text": "."}) and not _is_speech({"text": " "})
     assert not _is_speech({"text": "Thank you.", "no_speech_prob": 0.9})
     assert _is_speech({"text": "lexsi demo", "no_speech_prob": 0.1})
+
+
+def test_rate_limited_speech_is_retried(monkeypatch):
+    import folio_core.providers.stt.cloud_stt as cs
+
+    monkeypatch.setattr(cs.time, "sleep", lambda s: None)
+    calls = []
+
+    def handler(request):
+        calls.append(1)
+        if len(calls) < 3:
+            return httpx.Response(429, headers={"retry-after": "2"}, json={"error": "rate limited"})
+        return httpx.Response(200, json={"segments": [{"start": 0, "end": 1, "text": "hello"}]})
+
+    client = OpenAICompatibleLLM("https://api.groq.com/openai/v1", "m", "k", transport=httpx.MockTransport(handler))
+    segs = CloudWhisper(_Router(client)).transcribe(np.zeros(16000, dtype=np.float32))
+    assert [s.text for s in segs] == ["hello"] and len(calls) == 3

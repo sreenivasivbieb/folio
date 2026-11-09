@@ -12,6 +12,8 @@ from __future__ import annotations
 import json
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from datetime import date
 from typing import Any, Literal
 
@@ -94,14 +96,23 @@ def _context_text(ctx: LabelContext) -> str:
 
 
 class LLMLabelParser:
+    timeout_s = 25.0  # the user is waiting on the preview: never block on rate-limit retries
+
     def __init__(self, llm: Any, fallback: RuleLabelParser | None = None) -> None:
         self.llm = llm
         self.fallback = fallback or RuleLabelParser()
 
     def parse(self, transcript: str, ctx: LabelContext) -> dict[str, Any]:
         try:
-            raw = self.llm.complete_json(SYSTEM, f"{_context_text(ctx)}\n\nLABEL\n<<<\n{transcript}\n>>>",
-                                         LabelItems.model_json_schema())
+            pool = ThreadPoolExecutor(max_workers=1)
+            future = pool.submit(self.llm.complete_json, SYSTEM,
+                                 f"{_context_text(ctx)}\n\nLABEL\n<<<\n{transcript}\n>>>", LabelItems.model_json_schema())
+            pool.shutdown(wait=False)
+            try:
+                raw = future.result(timeout=self.timeout_s)
+            except FutureTimeout:
+                log.warning("label model took longer than %ss; using the rule grammar", self.timeout_s)
+                return {**self.fallback.parse(transcript, ctx), "engine": "rules (model too slow — try again later)"}
             items = LabelItems.model_validate_json(_json_only(raw)).items
             plan = self._plan(items, ctx)
         except (ValidationError, ValueError) as exc:
