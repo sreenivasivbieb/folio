@@ -305,3 +305,71 @@ def get_label(kdb: KnowledgeDB, label_id: str) -> Label | None:
 
 def list_labels(kdb: KnowledgeDB, limit: int = 50) -> list[Label]:
     return [label_from_doc(d) for d in kdb["labels"].find().sort("created_at", -1).limit(limit)]
+
+
+# --- organization: what labels say about files --------------------------------------------
+
+_DESCRIBING = ("description", "title", "summary")
+
+
+def _file_entities(kdb: KnowledgeDB, source_ids: list[str]) -> dict[str, list[str]]:
+    """source id -> the entities that represent it ("this file is the Acme contract")."""
+    out: dict[str, list[str]] = {}
+    for c in kdb["claims"].find({"predicate": "represented_by", "value": {"$in": source_ids},
+                                 "status": {"$ne": "rejected"}}):
+        out.setdefault(c["value"], []).append(c["subject_id"])
+    return out
+
+
+def file_organization(kdb: KnowledgeDB, source_ids: list[str]) -> dict[str, dict[str, Any]]:
+    """Tags (entities a file is about / linked to) and a description, per file."""
+    reps = _file_entities(kdb, source_ids)
+    ent_ids = [e for ids in reps.values() for e in ids]
+    if not ent_ids:
+        return {}
+    links: dict[str, list[str]] = {}
+    described: dict[str, str] = {}
+    for c in kdb["claims"].find({"subject_id": {"$in": ent_ids}, "status": {"$ne": "rejected"}}):
+        if c.get("object_id") and c["predicate"] != "mentions":
+            links.setdefault(c["subject_id"], []).append(c["object_id"])
+        elif c["predicate"] in _DESCRIBING and c.get("value") and c["subject_id"] not in described:
+            described[c["subject_id"]] = str(c["value"])
+    names = get_entities(kdb, [o for v in links.values() for o in v])
+    out: dict[str, dict[str, Any]] = {}
+    for sid, ents in reps.items():
+        tags, seen = [], set()
+        for e in ents:
+            for o in links.get(e, []):
+                ent = names.get(o)
+                if ent and o not in seen and ent.status.value not in ("merged", "rejected"):
+                    seen.add(o)
+                    tags.append({"id": o, "name": ent.name, "type": ent.type})
+        desc = next((described[e] for e in ents if e in described), None)
+        out[sid] = {"tags": tags, "description": desc}
+    return out
+
+
+def files_tagged(kdb: KnowledgeDB, tag_id: str) -> list[str]:
+    """Source ids of files linked to ``tag_id`` (directly, or the file's own entity is the tag)."""
+    tag_id = resolve_merged(kdb, tag_id)
+    subjects = {c["subject_id"] for c in kdb["claims"].find({"object_id": tag_id, "status": {"$ne": "rejected"},
+                                                              "predicate": {"$ne": "mentions"}})} | {tag_id}
+    return [c["value"] for c in kdb["claims"].find({"predicate": "represented_by", "subject_id": {"$in": list(subjects)},
+                                                    "status": {"$ne": "rejected"}})]
+
+
+def top_tags(kdb: KnowledgeDB, limit: int = 14) -> list[dict[str, Any]]:
+    """The entities most files are organized under (for the Library's topic chips)."""
+    file_ents: dict[str, str] = {c["subject_id"]: c["value"] for c in kdb["claims"].find(
+        {"predicate": "represented_by", "status": {"$ne": "rejected"}})}
+    if not file_ents:
+        return []
+    counts: dict[str, set[str]] = {}
+    for c in kdb["claims"].find({"subject_id": {"$in": list(file_ents)}, "status": {"$ne": "rejected"},
+                                 "predicate": {"$ne": "mentions"}}):
+        if c.get("object_id"):
+            counts.setdefault(c["object_id"], set()).add(file_ents[c["subject_id"]])
+    ents = get_entities(kdb, list(counts))
+    ranked = sorted((e for e in ents.values() if e.status.value not in ("merged", "rejected") and e.type != "Document"),
+                    key=lambda e: (-len(counts[e.id]), e.name.lower()))
+    return [{"id": e.id, "name": e.name, "type": e.type, "count": len(counts[e.id])} for e in ranked[:limit]]

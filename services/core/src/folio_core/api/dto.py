@@ -34,8 +34,21 @@ class ScanLocations(BaseModel):
     supported_extensions: list[str]
 
 
+class TagRef(BaseModel):
+    id: str
+    name: str
+    type: str
+    count: int = 0  # files carrying this tag (in the tag list)
+
+
+class FileItem(Source):
+    """A file plus what labels said about it, so the Library shows how things are organized."""
+    tags: list[TagRef] = Field(default_factory=list)
+    description: str | None = None
+
+
 class SourcePage(BaseModel):
-    sources: list[Source]
+    sources: list[FileItem]
     total: int
     offset: int
     limit: int

@@ -25,10 +25,15 @@ export function useSources() {
   return useQuery({ queryKey: ["sources"], queryFn: async () => unwrap(await client.GET("/api/sources")) });
 }
 
-export function useFilePage(q: string, offset: number) {
+export function useFilePage(q: string, offset: number, tag: string | null = null) {
   const { client } = useApi();
-  return useQuery({ queryKey: ["files", q, offset], queryFn: async () =>
-    unwrap(await client.GET("/api/files", { params: { query: { q, offset, limit: 100 } } })) });
+  return useQuery({ queryKey: ["files", q, offset, tag], placeholderData: (prev) => prev, queryFn: async () =>
+    unwrap(await client.GET("/api/files", { params: { query: { q, offset, limit: 100, tag: tag ?? undefined } } })) });
+}
+
+export function useFileTags() {
+  const { client } = useApi();
+  return useQuery({ queryKey: ["file-tags"], queryFn: async () => unwrap(await client.GET("/api/files/tags")) });
 }
 
 export function useSource(id: string | null | undefined) {

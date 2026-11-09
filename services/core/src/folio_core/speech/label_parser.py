@@ -215,6 +215,12 @@ class _Plan:
             return False
         key = self.this_ref()
         self.ops.append({"op": "attribute", "entity": key, "attribute": "description", "value": o.strip(), "dated": False})
+        # "weekly sync call recording about finance" -> also tag it "finance".
+        m = re.search(r"\b(?:about|regarding|related to|on the topic of|for the|for)\s+(?P<x>[\w&' -]{2,60})$", o.strip(), re.I)
+        if m:
+            for part in re.split(r"\s*(?:,|/|\band\b|&)\s*", m["x"]):
+                if part.strip() and len(part.strip()) > 1:
+                    self._add_topic(key, part)
         return True
 
     # --- topics / tags --------------------------------------------------------------------

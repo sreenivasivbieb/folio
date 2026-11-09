@@ -11,7 +11,7 @@ from ...domain.models import Chunk, Root, Source
 from ...ingestion.locations import DEFAULT_EXCLUSIONS, scan_locations
 from ...store import repo
 from ..deps import C
-from ..dto import AddRoot, Ok, ScanLocations, SourceDetail, SourcePage
+from ..dto import AddRoot, FileItem, Ok, ScanLocations, SourceDetail, SourcePage, TagRef
 
 router = APIRouter(tags=["sources"])
 
@@ -60,14 +60,25 @@ def locations(c: C) -> ScanLocations:
 
 
 @router.get("/files", response_model=SourcePage)
-def file_page(c: C, q: str = "", offset: int = Query(0, ge=0),
+def file_page(c: C, q: str = "", tag: str | None = None, offset: int = Query(0, ge=0),
               limit: int = Query(100, ge=1, le=500)) -> SourcePage:
-    query = {"status": {"$nin": repo.HIDDEN_SOURCE_STATUSES}}
+    """The Library list, newest first, with each file's tags and description. ``tag`` narrows it
+    to files organized under that topic/person/project."""
+    query: dict = {"status": {"$nin": repo.HIDDEN_SOURCE_STATUSES}}
     if q:
         query["path"] = {"$regex": re.escape(q), "$options": "i"}
-    docs = c.kdb["sources"].find(query).sort([("path", 1), ("_id", 1)]).skip(offset).limit(limit)
-    return SourcePage(sources=[repo.source_from_doc(d) for d in docs],
-                      total=c.kdb["sources"].count_documents(query), offset=offset, limit=limit)
+    if tag:
+        query["_id"] = {"$in": repo.files_tagged(c.kdb, tag)}
+    docs = list(c.kdb["sources"].find(query).sort([("updated_at", -1), ("_id", 1)]).skip(offset).limit(limit))
+    org = repo.file_organization(c.kdb, [d["_id"] for d in docs])
+    items = [FileItem(**repo.source_from_doc(d).model_dump(), **org.get(d["_id"], {})) for d in docs]
+    return SourcePage(sources=items, total=c.kdb["sources"].count_documents(query), offset=offset, limit=limit)
+
+
+@router.get("/files/tags", response_model=list[TagRef])
+def file_tags(c: C) -> list[TagRef]:
+    """Topics, projects, people... that files are organized under, most used first."""
+    return [TagRef(**t) for t in repo.top_tags(c.kdb)]
 
 
 @router.get("/sources/{source_id}", response_model=SourceDetail)

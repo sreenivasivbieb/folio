@@ -529,6 +529,7 @@
           "sources"
         ],
         "summary": "File Page",
+        "description": "The Library list, newest first, with each file's tags and description. ``tag`` narrows it\nto files organized under that topic/person/project.",
         "operationId": "file_page_api_files_get",
         "parameters": [
           {
@@ -539,6 +540,22 @@
               "type": "string",
               "default": "",
               "title": "Q"
+            }
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tag"
             }
           },
           {
@@ -582,6 +599,32 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/files/tags": {
+      "get": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "File Tags",
+        "description": "Topics, projects, people... that files are organized under, most used first.",
+        "operationId": "file_tags_api_files_tags_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TagRef"
+                  },
+                  "type": "array",
+                  "title": "Response File Tags Api Files Tags Get"
                 }
               }
             }
@@ -4946,6 +4989,124 @@
         ],
         "title": "FileHit"
       },
+      "FileItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "root_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Root Id"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SourceKind"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "mtime": {
+            "type": "number",
+            "title": "Mtime"
+          },
+          "content_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Hash"
+          },
+          "indexed_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Indexed Hash"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SourceStatus"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          },
+          "origin_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Path"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/TagRef"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "root_id",
+          "path",
+          "kind",
+          "size",
+          "mtime",
+          "content_hash",
+          "indexed_hash",
+          "status",
+          "updated_at"
+        ],
+        "title": "FileItem",
+        "description": "A file plus what labels said about it, so the Library shows how things are organized."
+      },
       "FileRef": {
         "properties": {
           "id": {
@@ -6220,7 +6381,7 @@
         "properties": {
           "sources": {
             "items": {
-              "$ref": "#/components/schemas/Source"
+              "$ref": "#/components/schemas/FileItem"
             },
             "type": "array",
             "title": "Sources"
@@ -6451,6 +6612,34 @@
           "entities"
         ],
         "title": "TableView"
+      },
+      "TagRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "type"
+        ],
+        "title": "TagRef"
       },
       "Target": {
         "properties": {

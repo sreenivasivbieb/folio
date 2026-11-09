@@ -109,7 +109,7 @@ export function GraphView() {
       labelColor: { attribute: "labelColor", color: cssVar("--text") },
       edgeLabelColor: { color: cssVar("--text-3") },
       labelRenderedSizeThreshold: 7,
-      stagePadding: 70, // keep nodes clear of the legend overlay
+      stagePadding: 120, // room for labels at the edges, and nodes clear of the legend overlay
       nodeReducer: (node, attrs) => {
         if (selectedRef.current.has(node)) return { ...attrs, highlighted: true, zIndex: 1, labelColor: "#18181b" };
         if (hoveredRef.current === node) return { ...attrs, labelColor: "#18181b" };

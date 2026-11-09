@@ -159,6 +159,7 @@ export function VoiceBar() {
           <span className="ellipsis">{target ?? "Nothing selected"}</span>
         </span>
         <input
+          id="label-input"
           placeholder={
             recording
               ? `Listening… ${Math.max(0, Math.floor((Date.now() - startedAt) / 1000))}s — release to preview`

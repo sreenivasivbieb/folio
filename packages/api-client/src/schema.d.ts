@@ -279,8 +279,32 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** File Page */
+        /**
+         * File Page
+         * @description The Library list, newest first, with each file's tags and description. ``tag`` narrows it
+         *     to files organized under that topic/person/project.
+         */
         get: operations["file_page_api_files_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/files/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * File Tags
+         * @description Topics, projects, people... that files are organized under, most used first.
+         */
+        get: operations["file_tags_api_files_tags_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1741,6 +1765,38 @@ export interface components {
             /** Via */
             via: string;
         };
+        /**
+         * FileItem
+         * @description A file plus what labels said about it, so the Library shows how things are organized.
+         */
+        FileItem: {
+            /** Id */
+            id: string;
+            /** Root Id */
+            root_id: string | null;
+            /** Path */
+            path: string;
+            kind: components["schemas"]["SourceKind"];
+            /** Size */
+            size: number;
+            /** Mtime */
+            mtime: number;
+            /** Content Hash */
+            content_hash: string | null;
+            /** Indexed Hash */
+            indexed_hash: string | null;
+            status: components["schemas"]["SourceStatus"];
+            /** Error */
+            error?: string | null;
+            /** Updated At */
+            updated_at: string;
+            /** Origin Path */
+            origin_path?: string | null;
+            /** Tags */
+            tags?: components["schemas"]["TagRef"][];
+            /** Description */
+            description?: string | null;
+        };
         /** FileRef */
         FileRef: {
             /** Id */
@@ -2189,7 +2245,7 @@ export interface components {
         /** SourcePage */
         SourcePage: {
             /** Sources */
-            sources: components["schemas"]["Source"][];
+            sources: components["schemas"]["FileItem"][];
             /** Total */
             total: number;
             /** Offset */
@@ -2279,6 +2335,20 @@ export interface components {
              * @default false
              */
             has_more: boolean;
+        };
+        /** TagRef */
+        TagRef: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /**
+             * Count
+             * @default 0
+             */
+            count: number;
         };
         /** Target */
         Target: {
@@ -2834,6 +2904,7 @@ export interface operations {
         parameters: {
             query?: {
                 q?: string;
+                tag?: string | null;
                 offset?: number;
                 limit?: number;
             };
@@ -2859,6 +2930,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    file_tags_api_files_tags_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagRef"][];
                 };
             };
         };

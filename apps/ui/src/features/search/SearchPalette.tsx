@@ -75,6 +75,13 @@ export function SearchPalette() {
         ),
       });
     }
+    // Typing a person's or topic's name most likely means that entity: show it first.
+    const needle = q.trim().toLowerCase();
+    const entityFirst = typed && (data?.entities ?? []).some((e) => e.name.toLowerCase().includes(needle));
+    if (entityFirst) {
+      const rank = (it: Item) => (it.key.startsWith("e:") ? 0 : it.key.startsWith("f:") ? 1 : 2);
+      out.sort((a, b) => rank(a) - rank(b));
+    }
     return out;
   }, [data, q, typed]);
 

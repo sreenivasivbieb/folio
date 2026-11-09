@@ -50,3 +50,25 @@ def test_empty_query_suggests_recent_files_and_entities(container, tmp_path):
     body = client.get("/api/search", params={"q": ""}, headers={"Authorization": "Bearer t"}).json()
     assert [Path(f["path"]).name for f in body["files"]] == ["recent.txt"]
     assert [e["name"] for e in body["entities"]] == ["kites"]
+
+
+def test_library_shows_tags_and_filters_by_them(container, tmp_path):
+    from fastapi.testclient import TestClient
+
+    from folio_core.api.app import create_app
+
+    a = _add(container, tmp_path, "a.txt", "alpha")
+    _add(container, tmp_path, "b.txt", "beta")
+    container.labels.confirm(container.labels.preview("tag this as finance and taxes", "source", [a.id]).id)
+    container.labels.confirm(container.labels.preview("expense report for march", "source", [a.id]).id)
+    client = TestClient(create_app(container, "t", start_background=False))
+    h = {"Authorization": "Bearer t"}
+    page = client.get("/api/files", headers=h).json()
+    item = next(s for s in page["sources"] if s["id"] == a.id)
+    assert {t["name"] for t in item["tags"]} == {"finance", "taxes"}
+    assert item["description"] == "expense report for march"
+    tags = client.get("/api/files/tags", headers=h).json()
+    finance = next(t for t in tags if t["name"] == "finance")
+    assert finance["count"] == 1
+    only = client.get("/api/files", params={"tag": finance["id"]}, headers=h).json()
+    assert [s["id"] for s in only["sources"]] == [a.id]
