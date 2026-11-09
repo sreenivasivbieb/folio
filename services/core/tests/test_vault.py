@@ -64,3 +64,18 @@ def test_cannot_import_folios_own_storage(container):
 
     with pytest.raises(InvalidInput):
         container.vault.import_paths([str(container.settings.data_dir)], "copy")
+
+
+def test_startup_rescan_sees_vault_files(container, tmp_path):
+    f = tmp_path / "clip.txt"
+    f.write_text("waiting file")
+    container.vault.import_paths([str(f)], "move")
+    drain(container)
+    root = container.vault.root()
+    walked = list(container.ingestion._iter_files(root))
+    assert [p.name for p in walked] == ["clip.txt"]  # the vault lives inside Folio's data folder
+    stored = _vault_files(container)[0]
+    Path(stored.path).unlink()
+    container.ingestion.rescan_all()
+    drain(container)
+    assert repo.get_source(container.kdb, stored.id).status.value == "missing"

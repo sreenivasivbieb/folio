@@ -132,7 +132,10 @@ class IngestionService:
         resolved = path.resolve()
         data = self.settings.data_dir.resolve()
         base = Path(root.path).resolve()
-        if resolved == data or data in resolved.parents or any(
+        vault = data / "vault"
+        # Folio's own data is never indexed — except the vault, where dumped files live.
+        in_vault = resolved == vault or vault in resolved.parents
+        if (not in_vault and (resolved == data or data in resolved.parents)) or any(
                 (resolved == p or p in resolved.parents)
                 and not (p in (Path("/tmp"), Path("/var/cache")) and (base == p or p in base.parents))
                 for p in SYSTEM_EXCLUSIONS):
