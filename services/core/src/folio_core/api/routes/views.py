@@ -51,8 +51,9 @@ def table(c: C, entity_id: str | None = None, status: list[str] | None = Query(d
 @router.get("/search", response_model=SearchResult)
 def search(q: str, c: C, k: int = 20) -> SearchResult:
     """Entity query by text (voice queries use the same endpoint with the transcript)."""
-    return SearchResult(entities=repo.search_entities(c.kdb, q, limit=10),
-                        passages=c.search.search(q, k))  # type: ignore[arg-type]
+    entities = repo.search_entities(c.kdb, q, limit=10)
+    return SearchResult(entities=entities, passages=c.search.search(q, k),  # type: ignore[arg-type]
+                        files=c.search.files(q, entities))  # type: ignore[arg-type]
 
 
 @router.get("/review", response_model=ReviewView)

@@ -245,9 +245,18 @@ class EntityCard(BaseModel):
     counts: dict[str, int]
 
 
+class FileHit(BaseModel):
+    source_id: str
+    path: str
+    kind: str
+    status: str
+    via: str  # why it matched: the topic/entity name, a label, or "file name"
+
+
 class SearchResult(BaseModel):
     entities: list[Entity]
     passages: list[Passage]
+    files: list[FileHit] = []
 
 
 class Conflict(BaseModel):

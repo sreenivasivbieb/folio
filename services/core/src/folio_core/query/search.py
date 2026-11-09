@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from ..domain.schema import REPRESENTED_BY
 from ..providers.embeddings.base import Embedder
 from ..store import repo
 from ..store.index_db import IndexDB, loads
@@ -41,7 +42,10 @@ class HybridSearch:
                 ranked[r[0]] = ranked.get(r[0], 0) + 1 / (RRF_K + rank + 1)
 
         qvec = self.embedder.embed([q])[0]
-        for rank, (rowid, _sim) in enumerate(self.vectors.search(qvec, pool)):
+        floor = getattr(self.embedder, "min_similarity", 0.0)
+        # Nearest neighbours always exist; without a floor every query "matched" random passages.
+        close = [(rowid, sim) for rowid, sim in self.vectors.search(qvec, pool) if sim >= floor]
+        for rank, (rowid, _sim) in enumerate(close):
             ranked[rowid] = ranked.get(rowid, 0) + 1 / (RRF_K + rank + 1)
 
         if not ranked:
@@ -68,3 +72,69 @@ class HybridSearch:
             if len(hits) >= k:
                 break
         return hits
+
+    def files(self, q: str, entities: list[Any], k: int = 20) -> list[dict[str, Any]]:
+        """Files for a topic/name query: files labelled with (or represented by) a matching
+        entity, files whose label transcript mentions the words, then file names."""
+        q = q.strip()
+        if len(q) < 2:
+            return []
+        found: dict[str, dict[str, Any]] = {}
+
+        def add(source_id: str | None, via: str) -> None:
+            if source_id and source_id not in found:
+                found[source_id] = {"source_id": source_id, "via": via}
+
+        # 1. Linked through the knowledge graph: "this file is about <topic>".
+        ent_ids = [e.id for e in entities]
+        names = {e.id: e.name for e in entities}
+        if ent_ids:
+            claims = list(self.kdb["claims"].find({"$or": [{"subject_id": {"$in": ent_ids}},
+                                                            {"object_id": {"$in": ent_ids}}],
+                                                   "status": {"$ne": "rejected"}}))
+            docs = {c["subject_id"] for c in claims} | {c.get("object_id") for c in claims if c.get("object_id")}
+            files_of = {}
+            for c in self.kdb["claims"].find({"predicate": REPRESENTED_BY, "subject_id": {"$in": list(docs)},
+                                              "status": {"$ne": "rejected"}}):
+                files_of.setdefault(c["subject_id"], []).append(c["value"])
+            for c in claims:
+                hit = names.get(c["subject_id"]) or names.get(c.get("object_id"))
+                if c["predicate"] == REPRESENTED_BY:
+                    add(c.get("value"), hit)
+                for other in (c["subject_id"], c.get("object_id")):
+                    for sid in files_of.get(other, []):
+                        add(sid, hit)
+                for e in c.get("evidence", []):
+                    if e.get("label_id"):  # a label said it about this file
+                        add(e.get("source_id"), hit)
+        # 2. Label transcripts that mention the words.
+        words = [w for w in _TOKEN.findall(q.lower()) if len(w) > 1]
+        if words:
+            pattern = "".join(f"(?=.*\\b{re.escape(w)})" for w in words)
+            for lab in self.kdb["labels"].find({"transcript": {"$regex": pattern, "$options": "i"},
+                                                "status": "committed"}).limit(200):
+                if lab.get("target_kind") == "source":
+                    for sid in lab.get("target_ids", []):
+                        add(sid, f"label: {lab['transcript'][:60]}")
+        # 3. File names.
+        like = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        with self.kdb._write_lock:
+            rows = self.kdb._reader().execute(
+                "SELECT id FROM documents WHERE collection = 'sources' AND "
+                "json_extract(body, '$.path') LIKE ? ESCAPE '\\' "
+                "AND json_extract(body, '$.status') NOT IN ('forgotten', 'removed') LIMIT ?",
+                (like, 500)).fetchall()
+        for (sid,) in rows:
+            add(sid, "file name")
+        sources = repo.get_sources(self.kdb, list(found))
+        out = []
+        for sid, hit in found.items():
+            src = sources.get(sid)
+            if src is None or src.status.value in repo.HIDDEN_SOURCE_STATUSES:
+                continue
+            if hit["via"] == "file name" and q.lower() not in src.path.rsplit("/", 1)[-1].rsplit("\\", 1)[-1].lower():
+                continue  # matched a folder name only
+            out.append({**hit, "path": src.path, "kind": src.kind.value, "status": src.status.value})
+            if len(out) >= k:
+                break
+        return out
