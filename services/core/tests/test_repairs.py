@@ -1,6 +1,7 @@
 """Regression tests for destructive failure paths, scanning, and resumable work."""
 
 from copy import deepcopy
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -126,7 +127,7 @@ def test_computer_scan_records_metadata_and_respects_exclusions(container, tmp_p
     container.ingestion.add_root(str(folder), include_hidden=True)
     drain(container)
     sources = repo.list_sources(container.kdb)
-    assert {s.path.rsplit("/", 1)[-1] for s in sources} == {"note.txt", "archive.bin", "hidden.txt"}
+    assert {Path(s.path).name for s in sources} == {"note.txt", "archive.bin", "hidden.txt"}
     assert next(s for s in sources if s.path.endswith("archive.bin")).status == SourceStatus.METADATA
 
 
@@ -145,7 +146,7 @@ def test_unreadable_file_does_not_abort_scan(container, tmp_path, monkeypatch):
     monkeypatch.setattr(container.ingestion, "_track", track)
     container.ingestion.add_root(str(folder))
     drain(container)
-    assert [s.path.rsplit("/", 1)[-1] for s in repo.list_sources(container.kdb)] == ["good.txt"]
+    assert [Path(s.path).name for s in repo.list_sources(container.kdb)] == ["good.txt"]
 
 
 def test_locations_decode_spaces_and_are_not_checkout_specific(tmp_path):
