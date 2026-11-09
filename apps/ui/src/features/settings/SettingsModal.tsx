@@ -7,6 +7,7 @@ import { Modal } from "@/components/Modal";
 import { EXPORT_FORMATS, exportFile } from "@/features/export/exportFile";
 import { type SettingsTab, ui } from "@/state/selection";
 import { toast } from "@/state/toast";
+import { DriveTab } from "./DriveTab";
 
 const TABS: { id: SettingsTab; label: string; icon: IconName }[] = [
   { id: "ai", label: "AI model", icon: "sparkles" },
@@ -14,6 +15,7 @@ const TABS: { id: SettingsTab; label: string; icon: IconName }[] = [
   { id: "privacy", label: "Privacy", icon: "shield" },
   { id: "hints", label: "Type hints", icon: "layers" },
   { id: "data", label: "Data", icon: "database" },
+  { id: "drive", label: "Google Drive", icon: "cloud" },
 ];
 
 export function SettingsModal() {
@@ -34,6 +36,7 @@ export function SettingsModal() {
           {tab === "privacy" && <PrivacyTab />}
           {tab === "hints" && <HintsTab />}
           {tab === "data" && <DataTab />}
+          {tab === "drive" && <DriveTab />}
         </div>
       </div>
     </Modal>
@@ -224,7 +227,7 @@ function PrivacyTab() {
         <Icon name={cloud ? "cloud" : "shield"} />
         <div className="grow">
           <b>{cloud ? "Cloud allowed for this project" : "Local only"}</b>
-          <div className="small text-2">{cloud ? `File text may be sent to ${status?.llm.label ?? "the configured provider"} for extraction.` : "No file content leaves this computer."}</div>
+          <div className="small text-2">{cloud ? `File text may be sent to ${status?.llm.label ?? "the configured provider"} for extraction.` : "AI processing stays on this device. Optional Google Drive backups are sent only when you choose Back up now."}</div>
         </div>
         <button type="button" className="btn sm" onClick={() => actions.setCloud.mutate(!cloud)}>{cloud ? "Go local only" : "Allow cloud"}</button>
       </div>
@@ -262,11 +265,21 @@ function HintsTab() {
 function DataTab() {
   const { conn } = useApi();
   const actions = useSettingsActions();
+  const importBackup = useAction(async (file: File) => {
+    if (file.size > 256 * 1024 * 1024) throw new Error("Choose a JSON backup smaller than 256 MB.");
+    const response = await fetch(`${conn.baseUrl}/api/import/json`, {
+      method: "POST", headers: { Authorization: `Bearer ${conn.token}`, "Content-Type": "application/json" },
+      body: await file.text(),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail ?? "Could not import the local backup.");
+    return result;
+  }, "Backup imported into your local project");
   return (
     <div className="stack" style={{ gap: 14 }}>
       <div>
         <h2>Data</h2>
-        <p className="lead small text-2" style={{ margin: 0 }}>Your knowledge lives in MongoDB (Docker), the search index in a local file that can always be rebuilt.</p>
+        <p className="lead small text-2" style={{ margin: 0 }}>Your files, knowledge and search index stay on this device. No Folio server or storage account is involved. Google Drive backup is optional and uses your own credentials.</p>
       </div>
       <div className="field">
         <label>Export</label>
@@ -276,6 +289,14 @@ function DataTab() {
             <div className="grow"><b>{f.title}</b><div className="small text-2">{f.text}</div></div>
           </div>
         ))}
+      </div>
+      <div className="field">
+        <label htmlFor="local-backup">Restore a local JSON backup (empty project only)</label>
+        <input id="local-backup" type="file" accept="application/json,.json" disabled={importBackup.isPending} onChange={(event) => {
+          const file = event.target.files?.[0]; if (file) importBackup.mutate(file);
+          event.target.value = "";
+        }} />
+        <p className="small text-2">This reads the backup on this device. It is not uploaded to a Folio server or Google Drive.</p>
       </div>
       <div className="field">
         <label>Maintenance</label>

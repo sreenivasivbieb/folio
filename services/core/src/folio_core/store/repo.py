@@ -14,12 +14,11 @@ import sqlite3
 from collections import defaultdict
 from typing import Any
 
-from pymongo.client_session import ClientSession
-
 from ..domain.models import Chunk, Claim, Entity, Evidence, Extractor, Label, Locator, Root, Source
 from ..domain.schema import SchemaDef
 from .index_db import dumps, loads, utcnow
-from .mongo import KnowledgeDB
+from .local import KnowledgeDB
+from .local import Session as ClientSession
 
 HIDDEN_SOURCE_STATUSES = ["forgotten", "removed"]
 
@@ -52,7 +51,8 @@ def predicates_in_use(kdb: KnowledgeDB) -> list[str]:
 
 
 def root_from_doc(d: dict[str, Any]) -> Root:
-    return Root(id=d["_id"], path=d["path"], kind=d["kind"], watch=bool(d["watch"]), created_at=d["created_at"])
+    return Root(id=d["_id"], path=d["path"], kind=d["kind"], watch=bool(d["watch"]), created_at=d["created_at"],
+                include_hidden=d.get("include_hidden", False), exclude=d.get("exclude", []))
 
 
 def list_roots(kdb: KnowledgeDB) -> list[Root]:
@@ -262,7 +262,14 @@ def query_claims(
         "confidence": [("confidence", 1), ("created_at", 1)],
         "date": [("valid_from", 1), ("created_at", 1)],
         "recent": [("updated_at", -1)],
-    }.get(order, [("created_at", 1)])
+        "subject": [("subject_id", 1)],
+        "predicate": [("predicate", 1)],
+        "status": [("status", 1)],
+        "value": [("value", 1)],
+    }.get(order.lstrip("-"), [("created_at", 1)])
+    if order.startswith("-"):
+        sort = [(key, -direction) for key, direction in sort]
+    sort = [*sort, ("_id", 1)]
     docs = kdb["claims"].find(q).sort(sort).skip(offset).limit(limit)
     return [claim_from_doc(d) for d in docs]
 

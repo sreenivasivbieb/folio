@@ -35,12 +35,16 @@ def swimlane(c: C, group_by: str = "entity", entity_id: list[str] | None = Query
 def table(c: C, entity_id: str | None = None, status: list[str] | None = Query(default=None),
           predicate: str | None = None, entity_type: str | None = None,
           min_confidence: float | None = None, include_mentions: bool = False,
-          order: str = "recent", limit: int = 1000) -> TableView:
+          order: str = "recent", limit: int = Query(100, ge=1, le=1000),
+          offset: int = Query(0, ge=0)) -> TableView:
     """Table view: claims for an entity or a filter, sortable, with bulk verify/reject."""
     data = c.views.table(entity_id=entity_id, status=status, predicate=predicate,
                          exclude_predicates=None if include_mentions else ["mentions"],
                          entity_type=entity_type, min_confidence=min_confidence, order=order,
-                         limit=limit)
+                         limit=limit + 1, offset=offset)
+    data["has_more"] = len(data["claims"]) > limit
+    data["claims"] = data["claims"][:limit]
+    data.update(offset=offset, limit=limit)
     return TableView.model_validate(data)
 
 

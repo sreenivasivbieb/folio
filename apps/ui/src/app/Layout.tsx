@@ -15,6 +15,7 @@ import { SearchPalette } from "@/features/search/SearchPalette";
 import { SettingsModal } from "@/features/settings/SettingsModal";
 import { useAddRoot } from "@/features/sources/SourcesPanel";
 import { VoiceBar } from "@/features/voice/VoiceBar";
+import { ScanModal } from "@/features/sources/ScanModal";
 import { openSettings, ui, type ViewName } from "@/state/selection";
 import { toasts } from "@/state/toast";
 import { GraphView } from "@/views/graph/GraphView";
@@ -91,6 +92,7 @@ function MainArea() {
             icon="folder"
             title="Bring your files"
             actions={<>
+              <button type="button" className="btn primary" onClick={() => ui.set({ modal: "scan" })}><Icon name="search" /> Scan my computer</button>
               <button type="button" className="btn primary" onClick={() => addRoot.mutate(true)}><Icon name="folder" /> Add a folder</button>
               <button type="button" className="btn" onClick={() => addRoot.mutate(false)}><Icon name="file" /> Add a file</button>
             </>}
@@ -161,6 +163,7 @@ export function Layout() {
       <Toasts />
       {modal === "search" && <SearchPalette />}
       {modal === "settings" && <SettingsModal />}
+      {modal === "scan" && <ScanModal />}
     </div>
   );
 }

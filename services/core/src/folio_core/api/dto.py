@@ -18,6 +18,27 @@ TargetKind = Literal["source", "chunk", "entity", "claim", "none"]
 class AddRoot(BaseModel):
     path: str
     watch: bool = True
+    include_hidden: bool = False
+    exclude: list[str] | None = None
+
+
+class ScanLocation(BaseModel):
+    path: str
+    label: str
+    kind: str
+
+
+class ScanLocations(BaseModel):
+    locations: list[ScanLocation]
+    default_exclusions: list[str]
+    supported_extensions: list[str]
+
+
+class SourcePage(BaseModel):
+    sources: list[Source]
+    total: int
+    offset: int
+    limit: int
 
 
 class CreateEntity(BaseModel):
@@ -95,6 +116,37 @@ class CloudBody(BaseModel):
     enabled: bool
 
 
+class DriveConnect(BaseModel):
+    client_id: str
+    client_secret: str | None = None
+
+
+class DriveStatus(BaseModel):
+    connected: bool
+    client_id: str
+    secret_configured: bool
+
+
+class DriveAuthorization(BaseModel):
+    authorization_url: str
+
+
+class DriveBackup(BaseModel):
+    id: str
+    name: str
+    size: str | None = None
+    modifiedTime: str | None = None
+
+
+class DriveBackups(BaseModel):
+    files: list[DriveBackup]
+    nextPageToken: str | None = None
+
+
+class DriveRestore(BaseModel):
+    file_id: str
+
+
 # --- responses ------------------------------------------------------------------------------
 
 
@@ -155,6 +207,9 @@ class SwimlaneView(BaseModel):
 class TableView(BaseModel):
     claims: list[Claim]
     entities: dict[str, EntityNode]
+    offset: int = 0
+    limit: int = 100
+    has_more: bool = False
 
 
 class ClaimInCard(Claim):

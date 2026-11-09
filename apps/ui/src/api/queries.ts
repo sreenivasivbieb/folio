@@ -25,6 +25,12 @@ export function useSources() {
   return useQuery({ queryKey: ["sources"], queryFn: async () => unwrap(await client.GET("/api/sources")) });
 }
 
+export function useFilePage(q: string, offset: number) {
+  const { client } = useApi();
+  return useQuery({ queryKey: ["files", q, offset], queryFn: async () =>
+    unwrap(await client.GET("/api/files", { params: { query: { q, offset, limit: 100 } } })) });
+}
+
 export function useSource(id: string | null | undefined) {
   const { client } = useApi();
   return useQuery({
@@ -69,11 +75,11 @@ export interface TableFilter {
   include_mentions?: boolean;
 }
 
-export function useTable(filter: TableFilter) {
+export function useTable(filter: TableFilter, offset = 0, order = "recent") {
   const { client } = useApi();
   return useQuery({
-    queryKey: ["claims", "table", filter],
-    queryFn: async () => unwrap(await client.GET("/api/views/table", { params: { query: { ...filter, limit: 1000 } } })),
+    queryKey: ["claims", "table", filter, offset, order],
+    queryFn: async () => unwrap(await client.GET("/api/views/table", { params: { query: { ...filter, limit: 100, offset, order } } })),
   });
 }
 

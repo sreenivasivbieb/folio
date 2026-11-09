@@ -1,0 +1,23 @@
+# Local binary package. scripts/build-omarchy.sh stages and checksums its exact inputs.
+pkgname=folio
+pkgver=0.2.0
+pkgrel=1
+pkgdesc='Local document knowledge organizer with computer and drive scanning'
+arch=('x86_64')
+url='https://github.com/sreenivasivbieb/folio'
+license=('custom')
+depends=('webkit2gtk-4.1' 'gtk3' 'openssl' 'portaudio' 'xdg-utils')
+optdepends=('ffmpeg: audio and video parsing' 'tesseract: OCR for images and scanned PDFs')
+options=('!strip')
+source=('folio' 'folio-core' 'folio.desktop' 'folio.png' 'INSTALL.md')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+  install -Dm755 folio "$pkgdir/usr/lib/folio/folio"
+  install -Dm755 folio-core "$pkgdir/usr/lib/folio/folio-core"
+  install -d "$pkgdir/usr/bin"
+  ln -s /usr/lib/folio/folio "$pkgdir/usr/bin/folio"
+  install -Dm644 folio.desktop "$pkgdir/usr/share/applications/dev.folio.desktop.desktop"
+  install -Dm644 folio.png "$pkgdir/usr/share/icons/hicolor/128x128/apps/folio.png"
+  install -Dm644 INSTALL.md "$pkgdir/usr/share/doc/folio/INSTALL.md"
+}

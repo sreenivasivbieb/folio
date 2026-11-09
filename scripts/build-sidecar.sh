@@ -15,13 +15,14 @@ EXT=""
 case "$TRIPLE" in *windows*) EXT=".exe" ;; esac
 
 cd "$CORE"
-uv sync --extra speech
-uv run --with pyinstaller pyinstaller \
+uv sync --frozen --extra speech --group build
+uv run --frozen --extra speech --group build pyinstaller \
   --noconfirm --clean --onefile --name folio-core \
   --collect-data folio_core \
   --collect-all sqlite_vec \
   --collect-all pypdfium2 --collect-all pypdfium2_raw \
   --collect-all faster_whisper --collect-all ctranslate2 \
+  --collect-all sounddevice --copy-metadata folio-core \
   --hidden-import uvicorn.logging --hidden-import uvicorn.protocols.http.auto \
   --hidden-import uvicorn.lifespan.on --hidden-import uvicorn.loops.auto \
   --distpath "$CORE/dist" --workpath "$CORE/build" \

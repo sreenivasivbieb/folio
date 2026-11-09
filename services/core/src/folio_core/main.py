@@ -51,18 +51,28 @@ def _exit_with_parent() -> None:
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
-    import uvicorn
-
-    from .api.app import create_app
     from .config import Settings
-    from .container import build_container
+    from .runtime import configure_logging, instance_lock
 
-    logging.basicConfig(level=os.environ.get("FOLIO_LOG", "INFO"),
-                        format="%(asctime)s %(levelname)s %(name)s: %(message)s", stream=sys.stderr)
     settings = Settings.from_env(
         data_dir=Path(args.data_dir) if args.data_dir else None,
         port=args.port, watch=False if args.no_watch else None,
     )
+    configure_logging(settings)
+    with instance_lock(settings):
+        try:
+            return _serve(settings, args)
+        except Exception:
+            logging.getLogger(__name__).exception("Folio core startup failed")
+            raise
+
+
+def _serve(settings, args: argparse.Namespace) -> int:  # type: ignore[no-untyped-def]
+    import uvicorn
+
+    from .api.app import create_app
+    from .container import build_container
+
     token = settings.token or secrets.token_urlsafe(32)
     container = build_container(settings)
     app = create_app(container, token)

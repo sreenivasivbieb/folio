@@ -41,7 +41,8 @@ class OpenAICompatibleLLM:
         headers = {"X-Title": "Folio", "HTTP-Referer": "https://github.com/sreenivasivbieb/folio"}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
-        self._client = httpx.Client(timeout=timeout_s, headers=headers, transport=transport)
+        self._client = httpx.Client(timeout=timeout_s, headers=headers, transport=transport,
+                                    trust_env=not self.is_local)
         self._json_schema_ok = True
 
     def _post(self, body: dict[str, Any]) -> httpx.Response:

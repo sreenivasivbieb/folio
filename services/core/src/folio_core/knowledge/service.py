@@ -19,7 +19,7 @@ from ..domain.values import coerce
 from ..ledger import Ledger, Tx
 from ..store import repo
 from ..store.index_db import IndexDB, utcnow
-from ..store.mongo import KnowledgeDB
+from ..store.local import KnowledgeDB
 
 BUILTIN_PREDICATES = {REPRESENTED_BY, MENTIONED, MENTIONS}
 FINGERPRINT_FIELDS = ("subject_id", "predicate", "value", "object_id")

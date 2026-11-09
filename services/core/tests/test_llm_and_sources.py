@@ -87,7 +87,9 @@ def test_removing_a_folder_hides_its_files_but_keeps_knowledge(container, files)
     assert container.kdb["claims"].count_documents({}) == claims_before
     container.ingestion.add_root(str(files))  # adding it back brings the files back
     drain(container)
-    assert len(repo.list_sources(container.kdb)) == 5
+    restored = repo.list_sources(container.kdb)
+    assert sum(source.status.value == "indexed" for source in restored) == 5
+    assert sum(source.status.value == "metadata" for source in restored) == 1
 
 
 def test_pdf_symbol_glyphs_are_cleaned():

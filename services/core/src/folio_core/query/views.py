@@ -15,7 +15,7 @@ from typing import Any
 from ..domain.models import Claim
 from ..domain.schema import MENTIONS
 from ..store import repo
-from ..store.mongo import KnowledgeDB
+from ..store.local import KnowledgeDB
 
 
 def _entity_node(e: Any, degree: int = 0) -> dict[str, Any]:

@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from ...domain.errors import Unavailable
 from ...store import repo
-from ...store.mongo import KnowledgeDB
+from ...store.local import KnowledgeDB
 from ..secrets import SecretStore
 from .openai_compat import OpenAICompatibleLLM, is_loopback
 

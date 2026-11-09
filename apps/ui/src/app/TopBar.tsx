@@ -13,7 +13,7 @@ function WorkIndicator() {
     <button type="button" className="btn ghost sm" onClick={() => ui.set({ leftTab: "activity" })} title="Background work">
       <Icon name="loader" spin />
       <span className="small">
-        {top ? `${top.kind === "extract_source" ? "Extracting" : top.kind === "download_speech_model" ? "Downloading" : "Indexing"}${top.message ? ` · ${top.message}` : ""}` : "Queued"}
+        {top ? `${top.kind === "scan_root" ? "Scanning" : top.kind === "extract_source" ? "Extracting" : top.kind === "download_speech_model" ? "Downloading" : "Indexing"}${top.message ? ` · ${top.message}` : ""}` : "Queued"}
         {queued ? ` (+${queued})` : ""}
       </span>
     </button>
@@ -43,10 +43,10 @@ export function TopBar() {
         className={`badge ${cloud ? "warn" : "ok"}`}
         style={{ border: 0, cursor: "pointer", height: 24, padding: "0 10px" }}
         onClick={() => openSettings("privacy")}
-        title={cloud ? `Cloud allowed: file text may be sent to ${status?.llm.label ?? "the AI provider"}` : "Everything stays on this computer"}
+        title={cloud ? `Cloud AI: file text may be sent to ${status?.llm.label ?? "the AI provider"}; working data stays local` : "AI processing stays on this device; optional Drive backups require your explicit action"}
       >
         <Icon name={cloud ? "cloud" : "shield"} size={13} />
-        {cloud ? `Cloud · ${status?.llm.label ?? "on"}` : "Local only"}
+        {cloud ? `Cloud AI · ${status?.llm.label ?? "on"}` : "Local AI"}
       </button>
       <div className="row" style={{ gap: 2 }}>
         <button type="button" className="btn ghost icon-only" title="Undo (Ctrl+Z)" onClick={() => undo.mutate(undefined)}><Icon name="undo" /></button>

@@ -22,7 +22,7 @@ from ..providers.privacy import ensure_allowed
 from ..providers.stt.base import Transcriber
 from ..store import repo
 from ..store.index_db import IndexDB, utcnow
-from ..store.mongo import KnowledgeDB
+from ..store.local import KnowledgeDB
 from .label_parser import LabelContext, RuleLabelParser, answer_question
 from .recorder import MicRecorder
 

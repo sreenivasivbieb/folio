@@ -35,3 +35,10 @@ runtime.json
 
 # PyInstaller
 *.spec
+
+# Local build toolchains and downloadable release artifacts
+.build-tools/
+artifacts/
+pkgbuild/src/
+pkgbuild/pkg/
+*.pkg.tar.zst

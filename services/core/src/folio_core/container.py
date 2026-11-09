@@ -1,12 +1,13 @@
 """Composition root: builds every service once and wires their dependencies.
 
 Read this file to see the whole core at a glance. Nothing else constructs services; tests build
-a Container with fake providers and a throwaway MongoDB database.
+a Container with fake providers and temporary local storage.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from dataclasses import dataclass
 from typing import Any
@@ -26,6 +27,7 @@ from .knowledge import KnowledgeService
 from .learning import CorrectionStore
 from .ledger import Ledger
 from .providers import Providers, build_providers
+from .providers.drive import DriveService
 from .providers.llm.router import ConfiguredLLM
 from .providers.secrets import SecretStore
 from .query.card import EntityCards
@@ -64,6 +66,7 @@ class Container:
     exporter: Exporter
     workers: WorkerPool
     watcher: FolderWatcher
+    drive: DriveService
 
     def current_extractor(self) -> Extractor:
         return self.extraction.extractor()
@@ -81,12 +84,15 @@ class Container:
         self.labels.cancel_recording()
         self.index.close()
         self.kdb.close()
+        self.drive.close()
 
 
 def build_container(settings: Settings, providers: Providers | None = None,
                     extractor: Extractor | None = None) -> Container:
-    settings.data_dir.mkdir(parents=True, exist_ok=True)
-    kdb = KnowledgeDB(settings.mongo_uri, settings.mongo_db)
+    settings.data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if os.name != "nt":
+        settings.data_dir.chmod(0o700)
+    kdb = KnowledgeDB(settings.data_dir / "knowledge.sqlite3")
     index = IndexDB(settings.index_db)
     bus = Bus()
     ledger = Ledger(kdb, bus)
@@ -131,6 +137,7 @@ def build_container(settings: Settings, providers: Providers | None = None,
         return f"{stt.model_id} ready; {n} audio/video file(s) queued"
 
     workers = WorkerPool(queue, {
+        "scan_root": ingestion.scan_root_job,
         "index_source": ingestion.index_source,
         "extract_source": extraction.extract_source,
         "download_speech_model": download_speech_model,
@@ -141,5 +148,5 @@ def build_container(settings: Settings, providers: Providers | None = None,
         providers=providers, secrets=secrets, llm=llm, vectors=vectors, knowledge=knowledge,
         learning=learning, ingestion=ingestion, extraction=extraction, labels=labels, search=search,
         cards=EntityCards(kdb, search), views=Views(kdb), review=ReviewQueue(kdb, index),
-        exporter=Exporter(kdb, bus), workers=workers, watcher=FolderWatcher(ingestion),
+        exporter=Exporter(kdb, bus), workers=workers, watcher=FolderWatcher(ingestion), drive=DriveService(secrets),
     )

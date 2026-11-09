@@ -8,7 +8,7 @@ from typing import Any
 from ..providers.embeddings.base import Embedder
 from ..store import repo
 from ..store.index_db import IndexDB, loads
-from ..store.mongo import KnowledgeDB
+from ..store.local import KnowledgeDB
 from ..store.vectors import VectorIndex
 
 RRF_K = 60

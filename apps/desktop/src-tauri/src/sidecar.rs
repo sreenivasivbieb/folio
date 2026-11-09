@@ -17,6 +17,20 @@ use std::time::Duration;
 const READY_PREFIX: &str = "FOLIO_READY ";
 const MAX_RESTARTS: u32 = 3;
 
+fn terminate_tree(child: &mut Child) {
+    // PyInstaller has a bootloader and a Python worker. Stop their entire owned group.
+    #[cfg(unix)]
+    unsafe {
+        libc::kill(-(child.id() as i32), libc::SIGKILL);
+    }
+    #[cfg(windows)]
+    {
+        let _ = Command::new("taskkill").args(["/PID", &child.id().to_string(), "/T", "/F"]).status();
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Connection {
@@ -51,6 +65,10 @@ fn core_command() -> Command {
     if let Some(path) = bundled.filter(|p| p.exists()) {
         return Command::new(path);
     }
+    if !cfg!(debug_assertions) {
+        // Installed builds must never fall back to the developer's source checkout.
+        return Command::new("folio-core");
+    }
     let repo_core = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../services/core");
     // Prefer the venv's entry point over `uv run`: then the child *is* the core, so killing it
     // and the core's exit-with-parent check work directly (uv would sit in between).
@@ -71,9 +89,8 @@ impl Sidecar {
             let mut restarts = 0;
             loop {
                 match me.spawn_once(&token) {
-                    Ok(child) => {
+                    Ok(()) => {
                         let (lock, _) = &*me.inner;
-                        lock.lock().unwrap().child = Some(child);
                         // Poll so that stop() can kill the child from another thread meanwhile.
                         let status = loop {
                             let mut inner = lock.lock().unwrap();
@@ -93,12 +110,23 @@ impl Sidecar {
                         }
                         log::warn!("core exited: {status:?}");
                     }
-                    Err(e) => log::error!("core failed to start: {e}"), // retried below
+                    Err(e) => {
+                        let (lock, cvar) = &*me.inner;
+                        let mut inner = lock.lock().unwrap();
+                        if let Some(mut child) = inner.child.take() { terminate_tree(&mut child); }
+                        if inner.shutting_down { return; }
+                        log::error!("core failed to start: {e}");
+                        inner.error = Some(e);
+                        cvar.notify_all();
+                    }
                 }
                 restarts += 1;
                 if restarts > MAX_RESTARTS {
                     let (lock, cvar) = &*me.inner;
-                    lock.lock().unwrap().error = Some("the core service keeps crashing; see logs".into());
+                    let mut inner = lock.lock().unwrap();
+                    if inner.error.is_none() {
+                        inner.error = Some("Core startup failed. See ~/.local/share/folio/logs/core.log.".into());
+                    }
                     cvar.notify_all();
                     return;
                 }
@@ -107,8 +135,8 @@ impl Sidecar {
         });
     }
 
-    /// Launch the core and block until it reports its port. Returns the child to wait on.
-    fn spawn_once(&self, token: &str) -> Result<Child, String> {
+    /// Register the child immediately so closing during startup also stops the worker.
+    fn spawn_once(&self, token: &str) -> Result<(), String> {
         let mut cmd = core_command();
         cmd.args(["serve", "--port", "0", "--exit-with-parent"])
             .env("FOLIO_TOKEN", token)
@@ -116,8 +144,22 @@ impl Sidecar {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit());
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            cmd.process_group(0);
+        }
         let mut child = cmd.spawn().map_err(|e| format!("cannot launch core: {e}"))?;
         let stdout = child.stdout.take().ok_or("no stdout")?;
+        {
+            let (lock, _) = &*self.inner;
+            let mut inner = lock.lock().unwrap();
+            if inner.shutting_down {
+                terminate_tree(&mut child);
+                return Err("Folio was closed during startup".into());
+            }
+            inner.child = Some(child);
+        }
         let mut lines = BufReader::new(stdout).lines();
         let port = loop {
             match lines.next() {
@@ -127,7 +169,7 @@ impl Sidecar {
                         break v["port"].as_u64().ok_or("ready line without port")?;
                     }
                 }
-                _ => return Err("core exited before it was ready".into()),
+                _ => return Err("Core startup failed. See ~/.local/share/folio/logs/core.log for the cause.".into()),
             }
         };
         // Keep draining stdout so the core never blocks on a full pipe.
@@ -135,11 +177,12 @@ impl Sidecar {
 
         let (lock, cvar) = &*self.inner;
         let mut inner = lock.lock().unwrap();
+        if inner.shutting_down { return Err("Folio was closed during startup".into()); }
         inner.connection = Some(Connection { base_url: format!("http://127.0.0.1:{port}"), token: token.into() });
         inner.error = None;
         cvar.notify_all();
         drop(inner);
-        Ok(child)
+        Ok(())
     }
 
     /// Wait (up to `timeout`) until the core is ready.
@@ -157,12 +200,15 @@ impl Sidecar {
     }
 
     pub fn stop(&self) {
-        let (lock, _) = &*self.inner;
+        let (lock, cvar) = &*self.inner;
         let mut inner = lock.lock().unwrap();
         inner.shutting_down = true;
-        if let Some(child) = inner.child.as_mut() {
-            let _ = child.kill();
+        inner.connection = None;
+        inner.error = Some("Folio was closed".into());
+        if let Some(mut child) = inner.child.take() {
+            terminate_tree(&mut child);
         }
+        cvar.notify_all();
     }
 }
 
@@ -182,15 +228,14 @@ mod tests {
     }
 
     /// Launches the real core (this checkout's venv) and talks to it.
-    /// Run with: `cargo test -- --ignored` (needs `uv sync` and `docker compose up -d`).
+    /// Run with: `cargo test -- --ignored --test-threads=1` (needs `uv sync`).
     #[test]
-    #[ignore = "starts the Python core; needs the venv and MongoDB"]
+    #[ignore = "starts the Python core; needs the venv"]
     fn starts_core_and_enforces_the_session_token() {
         let data = std::env::temp_dir().join(format!("folio-sidecar-test-{}", std::process::id()));
         std::env::set_var("FOLIO_DATA_DIR", &data);
         std::env::set_var("FOLIO_STT", "none");
         std::env::set_var("FOLIO_WATCH", "0");
-        std::env::set_var("FOLIO_MONGO_DB", "folio_sidecar_test"); // never touch the real project
 
         let sidecar = Sidecar::default();
         sidecar.start();
@@ -207,5 +252,33 @@ mod tests {
         thread::sleep(Duration::from_millis(800));
         assert!(TcpStream::connect(conn.base_url.trim_start_matches("http://")).is_err(), "core stopped");
         let _ = std::fs::remove_dir_all(data);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[ignore = "starts and terminates a delayed core subprocess"]
+    fn stops_core_while_it_is_still_starting() {
+        use std::os::unix::fs::PermissionsExt;
+        let folder = std::env::temp_dir().join(format!("folio-startup-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&folder).unwrap();
+        let script = folder.join("delayed-core");
+        std::fs::write(&script, "#!/bin/sh\nsleep 20\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let old = std::env::var_os("FOLIO_CORE_CMD");
+        std::env::set_var("FOLIO_CORE_CMD", &script);
+        let sidecar = Sidecar::default();
+        sidecar.start();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let pid = loop {
+            let (lock, _) = &*sidecar.inner;
+            if let Some(pid) = lock.lock().unwrap().child.as_ref().map(|child| child.id()) { break pid; }
+            assert!(std::time::Instant::now() < deadline, "startup child was not registered");
+            thread::sleep(Duration::from_millis(10));
+        };
+        sidecar.stop();
+        if let Some(value) = old { std::env::set_var("FOLIO_CORE_CMD", value); }
+        else { std::env::remove_var("FOLIO_CORE_CMD"); }
+        assert_ne!(unsafe { libc::kill(pid as i32, 0) }, 0, "startup launcher survived shutdown");
+        let _ = std::fs::remove_dir_all(folder);
     }
 }

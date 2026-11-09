@@ -1,3 +1,5 @@
+> Superseded by [ADR-0011](0011-local-user-owned-storage.md) for the current storage implementation.
+
 # 0002 — Split storage: durable `knowledge.db` + disposable `index.db`
 
 **Status.** Superseded in part by [0009](0009-mongodb-open-schema.md): durable knowledge now lives in

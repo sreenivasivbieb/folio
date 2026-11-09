@@ -4,12 +4,11 @@ import {
   type ColumnDef,
   flexRender,
   getCoreRowModel,
-  getSortedRowModel,
   type RowSelectionState,
   type SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useKnowledgeActions, useStatus, useTable } from "@/api/queries";
 import { Confidence, EntityName, StatusBadge } from "@/components/Badges";
 import { EmptyState } from "@/components/EmptyState";
@@ -55,18 +54,21 @@ export function TableView() {
   const [status, setStatus] = useState<string>("");
   const [entityType, setEntityType] = useState<string>("");
   const [predicate, setPredicate] = useState("");
-  const { data } = useTable({
+  const [offset, setOffset] = useState(0);
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const order = sorting[0] ? `${sorting[0].desc ? "-" : ""}${sorting[0].id}` : "recent";
+  const { data, isPending, error, refetch } = useTable({
     entity_id: scoped && focus ? focus : undefined,
     status: status ? [status] : undefined,
     entity_type: entityType || undefined,
     predicate: predicate || undefined,
-  });
+  }, offset, order);
+  useEffect(() => { setOffset(0); setRowSelection({}); }, [focus, scoped, status, entityType, predicate, order]);
   const schema = useSchemaDef();
   const { data: appStatus } = useStatus();
   const sources = useSourceNames();
   const actions = useKnowledgeActions();
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const entities = (data?.entities ?? {}) as Record<string, EntityNode>;
 
   const columns = useMemo<ColumnDef<Claim>[]>(
@@ -82,6 +84,7 @@ export function TableView() {
       { id: "status", header: "Status", accessorKey: "status", cell: (c) => <StatusBadge status={c.getValue<string>()} /> },
       {
         id: "subject",
+        enableSorting: false,
         header: "Subject",
         accessorFn: (c) => entities[c.subject_id]?.name ?? "",
         cell: ({ row }) => {
@@ -119,6 +122,7 @@ export function TableView() {
       { id: "confidence", header: "Conf.", accessorKey: "confidence", cell: (c) => <Confidence value={c.getValue<number>()} /> },
       {
         id: "source",
+        enableSorting: false,
         header: "Source",
         accessorFn: (c) => (c.evidence?.[0]?.source_id ? sources[c.evidence[0].source_id] ?? "" : ""),
         cell: ({ row }) => {
@@ -143,7 +147,7 @@ export function TableView() {
     onSortingChange: setSorting,
     onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
+    manualSorting: true,
   });
   const chosen = Object.keys(rowSelection).filter((k) => rowSelection[k]);
 
@@ -173,9 +177,13 @@ export function TableView() {
             <button type="button" className="btn sm danger" onClick={() => { actions.setClaimStatus.mutate({ ids: chosen, status: "rejected" }); setRowSelection({}); }}><Icon name="x" size={13} /> Reject</button>
           </>
         )}
-        <span className="small muted">{data?.claims.length ?? 0} facts</span>
+        <span className="small muted">{data?.claims.length ? `${offset + 1}–${offset + data.claims.length} facts` : "0 facts"}</span>
+        <button type="button" className="btn sm" disabled={!offset || isPending} onClick={() => setOffset(Math.max(0, offset - 100))}>Previous</button>
+        <button type="button" className="btn sm" disabled={!data?.has_more || isPending} onClick={() => setOffset(offset + 100)}>Next</button>
       </div>
       <div className="scroll">
+        {isPending && <p role="status" className="empty-inline">Loading facts…</p>}
+        {error && <div role="alert" className="empty-inline">Could not load facts. <button type="button" className="btn" onClick={() => void refetch()}>Retry</button></div>}
         <table className="grid">
           <thead>
             {table.getHeaderGroups().map((hg) => (

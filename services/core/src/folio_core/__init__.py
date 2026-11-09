@@ -17,4 +17,4 @@ Package map (each sub-package owns one responsibility from the architecture prop
     api/         FastAPI routers (thin: validate, call a service, return DTOs)
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

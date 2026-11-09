@@ -1,6 +1,6 @@
 {
   "name": "@folio/ui",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -32,6 +32,6 @@
     "graphology-types": "0.24.8",
     "typescript": "5.9.3",
     "vite": "7.3.7",
-    "vitest": "3.2.7"
+    "vitest": "4.1.12"
   }
 }

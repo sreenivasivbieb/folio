@@ -1,10 +1,7 @@
-"""Test fixtures. Tests need the MongoDB from docker-compose.yml (``docker compose up -d``); each
-container gets its own throwaway database, dropped after the test."""
+"""Test fixtures use private temporary local files; no server or cloud account is required."""
 
 from __future__ import annotations
 
-import os
-import uuid
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -19,13 +16,11 @@ from folio_core.providers.stt.unavailable import NoTranscriber
 
 from .samples import write_samples
 
-MONGO_URI = os.environ.get("FOLIO_TEST_MONGO_URI", Settings().mongo_uri)
 _created: list[Container] = []
 
 
 def make_container(tmp: Path, db_name: str | None = None, **kw) -> Container:  # type: ignore[no-untyped-def]
-    settings = Settings(data_dir=tmp / "data", watch=False, stt="none", workers=1, mongo_uri=MONGO_URI,
-                        mongo_db=db_name or f"folio_test_{uuid.uuid4().hex[:12]}")
+    settings = Settings(data_dir=tmp / "data", watch=False, stt="none", workers=1)
     providers = Providers(embedder=HashingEmbedder(), stt=kw.pop("stt", NoTranscriber("tests")),
                           llm=kw.pop("llm", FakeLLM()))
     c = build_container(settings, providers=providers, **kw)

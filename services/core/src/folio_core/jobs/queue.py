@@ -45,6 +45,17 @@ class JobQueue:
                 "dedupe_key, created_at, updated_at) VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?)",
                 (job_id, kind, dumps(payload), priority, max_attempts, dedupe_key, now, now),
             )
+            if cur.rowcount == 0 and dedupe_key:
+                active = conn.execute(
+                    "SELECT id, status FROM jobs WHERE dedupe_key = ? AND status IN ('queued', 'running')",
+                    (dedupe_key,),
+                ).fetchone()
+                if active:
+                    conn.execute(
+                        "UPDATE jobs SET priority = MAX(priority, ?), "
+                        "rerun = CASE WHEN status = 'running' THEN 1 ELSE rerun END WHERE id = ?",
+                        (priority, active["id"]),
+                    )
         if cur.rowcount == 0:
             return None
         self._publish(job_id)
@@ -75,8 +86,10 @@ class JobQueue:
     def finish(self, job_id: str, message: str | None = None) -> None:
         with self.db.write() as conn:
             conn.execute(
-                "UPDATE jobs SET status = 'done', progress = 1, message = ?, error = NULL, "
-                "updated_at = ? WHERE id = ?",
+                "UPDATE jobs SET status = CASE WHEN rerun = 1 THEN 'queued' ELSE 'done' END, "
+                "attempts = CASE WHEN rerun = 1 THEN 0 ELSE attempts END, "
+                "progress = CASE WHEN rerun = 1 THEN 0 ELSE 1 END, rerun = 0, message = ?, error = NULL, "
+                "updated_at = ? WHERE id = ? AND status = 'running'",
                 (message, utcnow(), job_id),
             )
         self._publish(job_id)

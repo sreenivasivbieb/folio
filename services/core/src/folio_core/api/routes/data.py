@@ -6,6 +6,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
+from starlette.concurrency import run_in_threadpool
 
 from ...domain.errors import InvalidInput
 from ...domain.schema import parse_schema_yaml
@@ -64,16 +65,19 @@ def export(fmt: Literal["json", "graphml", "markdown", "csv"], c: C) -> Response
 async def import_(fmt: Literal["json", "graphml"], request: Request, c: C) -> dict[str, int]:
     """Restore an export into an empty project (FR-9 round trip)."""
     body = await request.body()
-    if fmt == "json":
-        import json
+    def restore() -> dict[str, int]:
+        if fmt == "json":
+            import json
 
-        try:
-            data = json.loads(body)
-        except ValueError as exc:
-            raise InvalidInput("not valid JSON") from exc
-        counts = c.exporter.from_json(data)
-    else:
-        counts = c.exporter.from_graphml(body)
-    c.ingestion.rescan_all()
-    c.workers.notify()
-    return counts
+            try:
+                data = json.loads(body)
+            except ValueError as exc:
+                raise InvalidInput("not valid JSON") from exc
+            counts = c.exporter.from_json(data)
+        else:
+            counts = c.exporter.from_graphml(body)
+        c.ingestion.rescan_all()
+        c.workers.notify()
+        return counts
+
+    return await run_in_threadpool(restore)

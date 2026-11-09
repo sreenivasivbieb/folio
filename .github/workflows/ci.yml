@@ -14,8 +14,6 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - name: System tools for parsers
         run: sudo apt-get update && sudo apt-get install -y ffmpeg tesseract-ocr
-      - name: MongoDB (single-node replica set, same as docker-compose.yml)
-        run: docker compose up -d --wait mongo
       - name: Install
         working-directory: services/core
         run: uv sync

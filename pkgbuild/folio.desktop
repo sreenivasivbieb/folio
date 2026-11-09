@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Folio
+Comment=Find and organize knowledge across your files and drives
+Type=Application
+Exec=/usr/lib/folio/folio
+Icon=folio
+Terminal=false
+Categories=Office;
+StartupNotify=true
+StartupWMClass=dev.folio.desktop

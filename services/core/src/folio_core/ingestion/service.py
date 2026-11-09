@@ -16,7 +16,8 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from fnmatch import fnmatch
 from pathlib import Path
 
 import numpy as np
@@ -32,10 +33,11 @@ from ..providers.stt.base import Transcriber
 from ..realtime import Bus
 from ..store import repo
 from ..store.index_db import IndexDB, dumps, utcnow
-from ..store.mongo import KnowledgeDB
+from ..store.local import KnowledgeDB
 from ..store.vectors import VectorIndex
 from .base import ParseContext
 from .chunker import chunk_units
+from .locations import DEFAULT_EXCLUSIONS, SYSTEM_EXCLUSIONS
 from .registry import ParserRegistry
 from .sandbox import run_sandboxed
 
@@ -77,26 +79,34 @@ class IngestionService:
 
     # --- roots ----------------------------------------------------------------------------
 
-    def add_root(self, path: str, watch: bool = True) -> Root:
+    def add_root(self, path: str, watch: bool = True, include_hidden: bool = False,
+                 exclude: list[str] | None = None) -> Root:
         p = Path(path).expanduser().resolve()
         if not p.exists():
             raise InvalidInput(f"{p} does not exist")
-        if p.is_file() and not self.registry.supports(p):
-            raise InvalidInput(f"unsupported file type: {p.suffix or p.name}")
         existing = self.kdb["roots"].find_one({"path": str(p)})
         if existing:
             root = repo.root_from_doc(existing)
+            self.kdb["roots"].update_one({"_id": root.id}, {"$set": {
+                "watch": watch, "include_hidden": include_hidden,
+                "exclude": DEFAULT_EXCLUSIONS if exclude is None else exclude}})
+            root = repo.root_from_doc(self.kdb["roots"].find_one({"_id": root.id}))
         else:
             with self.ledger.group("user", "root.add", str(p)) as tx:
                 row = tx.insert("roots", {
                     "id": new_id("root"), "path": str(p), "kind": "file" if p.is_file() else "folder",
-                    "watch": watch, "created_at": utcnow(),
+                    "watch": watch, "created_at": utcnow(), "include_hidden": include_hidden,
+                    "exclude": DEFAULT_EXCLUSIONS if exclude is None else exclude,
                 })
             root = Root(**row)
-        self.scan_root(root)
+        self.queue.enqueue("scan_root", {"root_id": root.id}, dedupe_key=f"scan:{root.id}", priority=20)
         return root
 
     def remove_root(self, root_id: str) -> int:
+        with self.kdb._write_lock:
+            return self._remove_root(root_id)
+
+    def _remove_root(self, root_id: str) -> int:
         """Stop tracking a file/folder. Its knowledge stays; its files leave the list and the
         search index (derived data). Adding the folder again brings them back."""
         with self.ledger.group("user", "root.remove") as tx:
@@ -116,31 +126,78 @@ class IngestionService:
 
     # --- scanning -------------------------------------------------------------------------
 
-    def _iter_files(self, root: Root) -> list[Path]:
+    def _excluded(self, path: Path, root: Root) -> bool:
+        resolved = path.resolve()
+        data = self.settings.data_dir.resolve()
+        base = Path(root.path).resolve()
+        if resolved == data or data in resolved.parents or any(
+                (resolved == p or p in resolved.parents)
+                and not (p in (Path("/tmp"), Path("/var/cache")) and (base == p or p in base.parents))
+                for p in SYSTEM_EXCLUSIONS):
+            return True
+        return any(fnmatch(path.name, pattern) or fnmatch(str(path), pattern) for pattern in root.exclude)
+
+    def _iter_files(self, root: Root, on_error: Callable[[OSError], None] | None = None) -> Iterator[Path]:
         base = Path(root.path)
         if root.kind == "file":
-            return [base] if base.exists() else []
-        files: list[Path] = []
-        data_dir = self.settings.data_dir.resolve()
-        for dirpath, dirnames, filenames in os.walk(base):
+            if base.is_file() and not self._excluded(base, root):
+                yield base
+            return
+        for dirpath, dirnames, filenames in os.walk(base, onerror=on_error, followlinks=False):
             d = Path(dirpath)
-            dirnames[:] = [n for n in dirnames if not n.startswith(".") and (d / n).resolve() != data_dir]
-            files += [d / n for n in filenames if not n.startswith(".") and self.registry.supports(d / n)]
-        return files
+            dirnames[:] = [n for n in dirnames if (root.include_hidden or not n.startswith("."))
+                          and not (d / n).is_symlink() and not self._excluded(d / n, root)
+                          and (d != Path("/run") or n == "media")]
+            for n in filenames:
+                p = d / n
+                if ((root.include_hidden or not n.startswith(".")) and not p.is_symlink()
+                        and not self._excluded(p, root) and p.is_file()):
+                    if not os.access(p, os.R_OK):
+                        if on_error:
+                            on_error(PermissionError(f"cannot read {p}"))
+                        continue
+                    yield p
 
-    def scan_root(self, root: Root) -> int:
+    def scan_root(self, root: Root, job: Job | None = None) -> int:
         priority = PRIORITY_SELECTED_FILE if root.kind == "file" else PRIORITY_FOLDER_SCAN
-        seen: set[str] = set()
+        visited = 0
         queued = 0
-        for f in self._iter_files(root):
-            seen.add(str(f))
-            queued += self._track(f, root.id, priority)
+        unreadable = 0
+        metadata = 0
+
+        def failed(exc: OSError) -> None:
+            nonlocal unreadable
+            unreadable += 1
+            log.warning("scan skipped an unreadable path: %s", exc)
+
+        for f in self._iter_files(root, failed):
+            if job and visited % 100 == 0:
+                if self.kdb["roots"].find_one({"_id": root.id}) is None:
+                    return queued
+                self.queue.progress(job.id, 0, f"{visited} files visited; {queued} queued; {metadata} metadata only; {unreadable} unreadable")
+            visited += 1
+            try:
+                queued += self._track(f, root.id, priority)
+                metadata += int(not self.registry.supports(f))
+            except OSError as exc:
+                failed(exc)
         # Files that disappeared from a folder root are marked missing (their knowledge stays).
         for d in self.kdb["sources"].find({"root_id": root.id, "status": {"$nin": ["missing", "forgotten", "removed"]}}):
-            if d["path"] not in seen and not Path(d["path"]).exists():
+            if not Path(d["path"]).exists() and not unreadable:
                 repo.set_source_status(self.kdb, d["_id"], SourceStatus.MISSING)
                 self._changed(d["_id"])
+        if job:
+            self.queue.progress(job.id, 1, f"{visited} files visited; {queued} queued; {metadata} metadata only; {unreadable} unreadable")
         return queued
+
+    def scan_root_job(self, job: Job) -> str:
+        doc = self.kdb["roots"].find_one({"_id": job.payload["root_id"]})
+        if doc is None:
+            return "cancelled: folder no longer tracked"
+        root = repo.root_from_doc(doc)
+        queued = self.scan_root(root, job)
+        progress = self.queue.get(job.id)
+        return "Scan complete: " + (progress.message or f"{queued} file(s) queued for content indexing")
 
     def _root_for(self, path: Path) -> Root | None:
         for root in self.roots():
@@ -155,7 +212,7 @@ class IngestionService:
         root = self._root_for(path)
         if root is None:
             return
-        if path.is_file() and self.registry.supports(path):
+        if path.is_file() and not self._excluded(path, root):
             self._track(path, root.id, PRIORITY_WATCH_CHANGE)
         elif not path.exists():
             src = repo.source_by_path(self.kdb, str(path))
@@ -164,14 +221,17 @@ class IngestionService:
                 self._changed(src.id)
 
     def rescan_all(self) -> int:
-        return sum(self.scan_root(r) for r in self.roots())
+        return sum(bool(self.queue.enqueue("scan_root", {"root_id": r.id}, dedupe_key=f"scan:{r.id}", priority=20))
+                   for r in self.roots())
 
     def _track(self, path: Path, root_id: str, priority: int) -> int:
+        with self.kdb._write_lock:
+            return self._track_locked(path, root_id, priority)
+
+    def _track_locked(self, path: Path, root_id: str, priority: int) -> int:
         """Upsert the source; queue indexing if the file is new or its size/mtime changed."""
         found = self.registry.for_path(path)
-        if found is None:
-            return 0
-        _parser, kind = found
+        kind = found[1] if found else SourceKind.OTHER
         st = path.stat()
         now = utcnow()
         src = repo.source_by_path(self.kdb, str(path))
@@ -180,19 +240,24 @@ class IngestionService:
             self.kdb["sources"].insert_one({
                 "_id": src_id, "root_id": root_id, "path": str(path), "kind": kind.value,
                 "size": st.st_size, "mtime": st.st_mtime, "content_hash": None, "indexed_hash": None,
-                "status": SourceStatus.PENDING.value, "error": None, "priority": priority,
+                "status": SourceStatus.PENDING.value if found else SourceStatus.METADATA.value,
+                "error": None, "priority": priority,
                 "created_at": now, "updated_at": now,
             })
         else:
             src_id = src.id
             if src.status == SourceStatus.FORGOTTEN:
                 return 0  # the user asked us to forget this file
-            if (src.size == st.st_size and src.mtime == st.st_mtime and src.status == SourceStatus.INDEXED):
+            if (src.size == st.st_size and src.mtime == st.st_mtime
+                    and src.status in (SourceStatus.INDEXED, SourceStatus.METADATA)):
                 return 0
             self.kdb["sources"].update_one({"_id": src_id}, {
-                "$set": {"root_id": root_id, "status": SourceStatus.PENDING.value, "error": None, "updated_at": now},
+                "$set": {"root_id": root_id, "status": SourceStatus.PENDING.value if found else SourceStatus.METADATA.value,
+                         "size": st.st_size, "mtime": st.st_mtime, "error": None, "updated_at": now},
                 "$max": {"priority": priority},
             })
+        if found is None:
+            return 0
         self._changed(src_id)
         job = self.queue.enqueue("index_source", {"source_id": src_id},
                                  dedupe_key=f"index:{src_id}", priority=priority)
@@ -210,39 +275,68 @@ class IngestionService:
     # --- indexing (job handler) -----------------------------------------------------------
 
     def index_source(self, job: Job) -> str:
-        src = repo.get_source(self.kdb, job.payload["source_id"])
-        if src is None or src.status in (SourceStatus.FORGOTTEN, SourceStatus.REMOVED):
-            return "skipped: source no longer tracked"
+        with self.kdb._write_lock:
+            src = repo.get_source(self.kdb, job.payload["source_id"])
+            if src is None or src.status in (SourceStatus.FORGOTTEN, SourceStatus.REMOVED, SourceStatus.METADATA):
+                return "skipped: source no longer tracked or has metadata only"
+            repo.set_source_status(self.kdb, src.id, SourceStatus.INDEXING)
         path = Path(src.path)
         if not path.exists():
-            repo.set_source_status(self.kdb, src.id, SourceStatus.MISSING)
+            with self.kdb._write_lock:
+                current = repo.get_source(self.kdb, src.id)
+                if current and current.status == SourceStatus.INDEXING:
+                    repo.set_source_status(self.kdb, src.id, SourceStatus.MISSING)
             self._changed(src.id)
             return "file missing"
-        repo.set_source_status(self.kdb, src.id, SourceStatus.INDEXING)
         self._changed(src.id)
-        st = path.stat()
-        self.queue.progress(job.id, 0.01, "hashing")
-        digest = file_hash(path)
+        try:
+            st = path.stat()
+            self.queue.progress(job.id, 0.01, "hashing")
+            digest = file_hash(path)
+        except OSError as exc:
+            with self.kdb._write_lock:
+                current = repo.get_source(self.kdb, src.id)
+                if current and current.status == SourceStatus.INDEXING:
+                    repo.set_source_status(self.kdb, src.id, SourceStatus.FAILED, error=str(exc)[:1000])
+            self._changed(src.id)
+            raise
         if digest == src.indexed_hash and self._has_chunks(src.id):
-            repo.set_source_status(self.kdb, src.id, SourceStatus.INDEXED, size=st.st_size,
-                                   mtime=st.st_mtime, content_hash=digest)
+            with self.kdb._write_lock:
+                current = repo.get_source(self.kdb, src.id)
+                if current is None or current.status != SourceStatus.INDEXING:
+                    return "cancelled: source changed or is no longer tracked"
+                repo.set_source_status(self.kdb, src.id, SourceStatus.INDEXED, size=st.st_size,
+                                       mtime=st.st_mtime, content_hash=digest)
             self._changed(src.id)
             return "unchanged (content hash match): nothing to do"
         try:
             units = self._parse(path, job)
             drafts = chunk_units(units)
             self.queue.progress(job.id, 0.96, f"{len(drafts)} chunks; embedding")
-            self._store_chunks(src, drafts)
+            if not self._commit_index(src, drafts, st, digest):
+                return "cancelled: source changed or is no longer tracked"
         except Exception as exc:
-            repo.set_source_status(self.kdb, src.id, SourceStatus.FAILED, error=str(exc)[:1000])
+            with self.kdb._write_lock:
+                current = repo.get_source(self.kdb, src.id)
+                if current and current.status == SourceStatus.INDEXING:
+                    repo.set_source_status(self.kdb, src.id, SourceStatus.FAILED, error=str(exc)[:1000])
             self._changed(src.id)
             raise
-        repo.set_source_status(self.kdb, src.id, SourceStatus.INDEXED, size=st.st_size,
-                               mtime=st.st_mtime, content_hash=digest, indexed_hash=digest)
-        self._changed(src.id)
-        priority = (self.kdb["sources"].find_one({"_id": src.id}, {"priority": 1}) or {}).get("priority", 0)
-        self.queue.enqueue("extract_source", {"source_id": src.id}, dedupe_key=f"extract:{src.id}", priority=priority)
         return f"indexed {len(drafts)} chunks"
+
+    def _commit_index(self, src: Source, drafts, st, digest: str) -> bool:  # type: ignore[no-untyped-def]
+        # Parsing stays outside the lock. Forget/remove and this short commit cannot interleave.
+        with self.kdb._write_lock:
+            current = repo.get_source(self.kdb, src.id)
+            if current is None or current.status != SourceStatus.INDEXING:
+                return False
+            self._store_chunks(src, drafts)
+            repo.set_source_status(self.kdb, src.id, SourceStatus.INDEXED, size=st.st_size,
+                                   mtime=st.st_mtime, content_hash=digest, indexed_hash=digest)
+            self._changed(src.id)
+            priority = (self.kdb["sources"].find_one({"_id": src.id}, {"priority": 1}) or {}).get("priority", 0)
+            self.queue.enqueue("extract_source", {"source_id": src.id}, dedupe_key=f"extract:{src.id}", priority=priority)
+            return True
 
     def _parse(self, path: Path, job: Job):  # type: ignore[no-untyped-def]
         found = self.registry.for_path(path)
@@ -302,6 +396,10 @@ class IngestionService:
     # --- forget ---------------------------------------------------------------------------
 
     def forget_source(self, source_id: str) -> dict[str, int]:
+        with self.kdb._write_lock:
+            return self._forget_source(source_id)
+
+    def _forget_source(self, source_id: str) -> dict[str, int]:
         """"Forget this file": drop its chunks, embeddings and unverified claims. Verified claims
         that rested only on it are kept but flagged for review (proposal: "Right to forget")."""
         if repo.get_source(self.kdb, source_id) is None:

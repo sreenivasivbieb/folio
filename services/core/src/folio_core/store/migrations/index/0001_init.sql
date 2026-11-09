@@ -1,6 +1,6 @@
 -- index.db — the DISPOSABLE store. Everything here can be rebuilt from the files plus the
 -- knowledge store. Deleting this file is always safe; the app re-indexes in the background.
--- The durable knowledge (entities, claims, labels, ledger) lives in MongoDB.
+-- The durable knowledge (entities, claims, labels, ledger) lives in knowledge.sqlite3.
 
 CREATE TABLE meta (
   key   TEXT PRIMARY KEY,

@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..domain.errors import PrivacyBlocked
-from ..store.mongo import KnowledgeDB
+from ..store.local import KnowledgeDB
 from ..store.repo import get_setting
 
 

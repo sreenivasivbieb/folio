@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import mimetypes
+import re
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import FileResponse
 
 from ...domain.errors import NotFound
 from ...domain.models import Chunk, Root, Source
+from ...ingestion.locations import DEFAULT_EXCLUSIONS, scan_locations
 from ...store import repo
 from ..deps import C
-from ..dto import AddRoot, Ok, SourceDetail
+from ..dto import AddRoot, Ok, ScanLocations, SourceDetail, SourcePage
 
 router = APIRouter(tags=["sources"])
 
@@ -22,7 +24,7 @@ def list_roots(c: C) -> list[Root]:
 @router.post("/roots", response_model=Root)
 def add_root(body: AddRoot, c: C) -> Root:
     """Select a file or folder. Nothing is copied or moved; indexing starts in the background."""
-    root = c.ingestion.add_root(body.path, body.watch)
+    root = c.ingestion.add_root(body.path, body.watch, body.include_hidden, body.exclude)
     c.watcher.sync()
     c.workers.notify()
     return root
@@ -44,8 +46,28 @@ def rescan(c: C) -> Ok:
 
 
 @router.get("/sources", response_model=list[Source])
-def list_sources(c: C, root_id: str | None = None) -> list[Source]:
-    return repo.list_sources(c.kdb, root_id)
+def list_sources(c: C, root_id: str | None = None, limit: int = Query(1000, ge=1, le=5000)) -> list[Source]:
+    query = {"status": {"$nin": repo.HIDDEN_SOURCE_STATUSES}, "kind": {"$ne": "other"}}
+    if root_id:
+        query["root_id"] = root_id
+    return [repo.source_from_doc(d) for d in c.kdb["sources"].find(query).sort("path", 1).limit(limit)]
+
+
+@router.get("/scan/locations", response_model=ScanLocations)
+def locations(c: C) -> ScanLocations:
+    return ScanLocations(locations=scan_locations(), default_exclusions=DEFAULT_EXCLUSIONS,
+                         supported_extensions=c.ingestion.registry.extensions)
+
+
+@router.get("/files", response_model=SourcePage)
+def file_page(c: C, q: str = "", offset: int = Query(0, ge=0),
+              limit: int = Query(100, ge=1, le=500)) -> SourcePage:
+    query = {"status": {"$nin": repo.HIDDEN_SOURCE_STATUSES}}
+    if q:
+        query["path"] = {"$regex": re.escape(q), "$options": "i"}
+    docs = c.kdb["sources"].find(query).sort([("path", 1), ("_id", 1)]).skip(offset).limit(limit)
+    return SourcePage(sources=[repo.source_from_doc(d) for d in docs],
+                      total=c.kdb["sources"].count_documents(query), offset=offset, limit=limit)
 
 
 @router.get("/sources/{source_id}", response_model=SourceDetail)
@@ -86,7 +108,7 @@ def source_file(source_id: str, c: C) -> FileResponse:
 
 @router.post("/index/rebuild", response_model=Ok)
 def rebuild_index(c: C) -> Ok:
-    """Empty index.db and re-index everything. Knowledge (MongoDB) is untouched."""
+    """Empty index.db and re-index everything. Local knowledge is untouched."""
     c.index.reset()
     c.vectors.ensure()
     c.kdb["sources"].update_many({"status": {"$nin": repo.HIDDEN_SOURCE_STATUSES}},

@@ -9,10 +9,11 @@ from typing import Any
 from xml.etree import ElementTree as ET
 
 from ..domain.errors import Conflict, InvalidInput
-from ..domain.schema import MENTIONS, REPRESENTED_BY
+from ..domain.schema import MENTIONS, REPRESENTED_BY, SchemaDef
 from ..realtime import Bus
+from ..store import repo
 from ..store.index_db import utcnow
-from ..store.mongo import KnowledgeDB
+from ..store.local import KnowledgeDB, WriteConflict
 
 FORMAT = "folio.v2"
 DURABLE = ["settings", "schema_versions", "roots", "sources", "entities", "claims", "labels",
@@ -32,9 +33,42 @@ class Exporter:
         sort = [("seq", 1)] if coll in LEDGER else [("_id", 1)]
         return list(self.kdb[coll].find().sort(sort))
 
-    def _ensure_empty(self) -> None:
-        if self.kdb["entities"].count_documents({}, limit=1) or self.kdb["claims"].count_documents({}, limit=1):
+    def _ensure_empty(self, session=None) -> None:  # type: ignore[no-untyped-def]
+        if (self.kdb["entities"].count_documents({}, limit=1, session=session)
+                or self.kdb["claims"].count_documents({}, limit=1, session=session)):
             raise Conflict("import needs an empty project (this one already has entities or claims)")
+
+    @staticmethod
+    def _validate_rows(coll: str, docs: Any) -> list[dict[str, Any]]:
+        if not isinstance(docs, list):
+            raise InvalidInput(f"{coll} must be an array")
+        seen: set[str] = set()
+        try:
+            for d in docs:
+                if not isinstance(d, dict) or not isinstance(d.get("_id"), str) or not d["_id"]:
+                    raise ValueError("each record needs a string _id")
+                if d["_id"] in seen:
+                    raise ValueError(f"duplicate id {d['_id']}")
+                seen.add(d["_id"])
+                if coll == "entities":
+                    repo.entity_from_doc(d)
+                elif coll == "claims":
+                    repo.claim_from_doc(d)
+                elif coll == "sources":
+                    repo.source_from_doc(d)
+                elif coll == "roots":
+                    repo.root_from_doc(d)
+                elif coll == "labels":
+                    repo.label_from_doc(d)
+                elif coll == "schema_versions":
+                    SchemaDef.model_validate(d["definition"])
+                    if not isinstance(d["version"], int):
+                        raise ValueError("schema version must be an integer")
+                elif coll in LEDGER and not isinstance(d["seq"], int):
+                    raise ValueError("ledger sequence must be an integer")
+        except (ValueError, TypeError, KeyError) as exc:
+            raise InvalidInput(f"invalid {coll} import: {exc}") from exc
+        return docs
 
     def _imported(self, colls: list[str]) -> None:
         self.bus.publish({"type": "ledger", "action": "import", "tables": colls, "rows": []})
@@ -42,33 +76,42 @@ class Exporter:
     # --- JSON (lossless, including the full ledger) ---------------------------------------
 
     def to_json(self) -> dict[str, Any]:
-        return {"format": FORMAT, "exported_at": utcnow(), **{c: self._docs(c) for c in DURABLE}}
+        with self.kdb._write_lock:
+            return {"format": FORMAT, "exported_at": utcnow(), **{c: self._docs(c) for c in DURABLE}}
 
     def from_json(self, data: dict[str, Any]) -> dict[str, int]:
-        if data.get("format") != FORMAT:
+        if not isinstance(data, dict) or data.get("format") != FORMAT:
             raise InvalidInput(f"not a {FORMAT} export")
-        self._ensure_empty()
+        prepared = {coll: self._validate_rows(coll, data.get(coll, [])) for coll in DURABLE}
         counts: dict[str, int] = {}
         # The fresh project only holds its own schema install: the import's hints replace it, and
         # imported ledger entries are appended after this project's own (renumbered, same order).
-        self.kdb["schema_versions"].delete_many({})
-        offsets = {c: (self.kdb[c].find_one(sort=[("seq", -1)]) or {"seq": 0})["seq"] for c in LEDGER}
-        for coll in DURABLE:
-            docs = data.get(coll, [])
-            if coll in LEDGER:
-                docs = [{**d, "seq": d["seq"] + offsets[coll]} for d in docs]
-            if coll == "sources":  # derived data is not exported: re-index on this machine
-                docs = [{**d, "indexed_hash": None, "status": d["status"] if d["status"] in ("forgotten", "removed") else "pending"}
-                        for d in docs]
-            if docs:
-                if coll == "settings":  # imported settings win over the fresh project's defaults
-                    self.kdb[coll].delete_many({"_id": {"$in": [d["_id"] for d in docs]}})
-                self.kdb[coll].insert_many(docs)
-            counts[coll] = len(docs)
-        for coll, counter in (("events", "events"), ("event_groups", "groups")):
-            top = self.kdb[coll].find_one(sort=[("seq", -1)])
-            if top:
-                self.kdb["counters"].update_one({"_id": counter}, {"$max": {"seq": top["seq"]}}, upsert=True)
+        try:
+            with self.kdb.transaction() as session:
+                self._ensure_empty(session)
+                self.kdb["schema_versions"].delete_many({}, session=session)
+                offsets = {c: (self.kdb[c].find_one(sort=[("seq", -1)], session=session)
+                               or {"seq": 0})["seq"] for c in LEDGER}
+                for coll in DURABLE:
+                    docs = prepared[coll]
+                    if coll in LEDGER:
+                        docs = [{**d, "seq": d["seq"] + offsets[coll]} for d in docs]
+                    if coll == "sources":
+                        docs = [{**d, "indexed_hash": None,
+                                 "status": d["status"] if d["status"] in ("forgotten", "removed") else "pending"}
+                                for d in docs]
+                    if docs:
+                        if coll == "settings":
+                            self.kdb[coll].delete_many({"_id": {"$in": [d["_id"] for d in docs]}}, session=session)
+                        self.kdb[coll].insert_many(docs, session=session)
+                    counts[coll] = len(docs)
+                for coll, counter in (("events", "events"), ("event_groups", "groups")):
+                    top = self.kdb[coll].find_one(sort=[("seq", -1)], session=session)
+                    if top:
+                        self.kdb["counters"].update_one({"_id": counter}, {"$max": {"seq": top["seq"]}},
+                                                        upsert=True, session=session)
+        except WriteConflict as exc:
+            raise InvalidInput("import conflicts with existing records; nothing was imported") from exc
         self._imported(DURABLE)
         return counts
 
@@ -116,8 +159,10 @@ class Exporter:
         return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
     def from_graphml(self, payload: bytes) -> dict[str, int]:
-        self._ensure_empty()
-        root = ET.fromstring(payload)
+        try:
+            root = ET.fromstring(payload)
+        except ET.ParseError as exc:
+            raise InvalidInput("not valid GraphML") from exc
         ns = {"g": GRAPHML_NS}
         keymap = {k.get("id"): k.get("attr.name") for k in root.findall("g:key", ns)}
 
@@ -129,14 +174,27 @@ class Exporter:
             f = fields(node)
             if "entity_json" not in f:
                 raise InvalidInput("not a Folio GraphML export (missing entity_json)")
-            entities.append(json.loads(f["entity_json"]))
-            claims += json.loads(f.get("attribute_claims") or "[]")
+            try:
+                entities.append(json.loads(f["entity_json"]))
+                claims += json.loads(f.get("attribute_claims") or "[]")
+            except (ValueError, TypeError) as exc:
+                raise InvalidInput("invalid GraphML node data") from exc
         for edge in root.iter(f"{{{GRAPHML_NS}}}edge"):
-            claims.append(json.loads(fields(edge)["claim_json"]))
-        if entities:
-            self.kdb["entities"].insert_many(entities)
-        if claims:
-            self.kdb["claims"].insert_many(claims)
+            try:
+                claims.append(json.loads(fields(edge)["claim_json"]))
+            except (ValueError, TypeError, KeyError) as exc:
+                raise InvalidInput("invalid GraphML edge data") from exc
+        self._validate_rows("entities", entities)
+        self._validate_rows("claims", claims)
+        try:
+            with self.kdb.transaction() as session:
+                self._ensure_empty(session)
+                if entities:
+                    self.kdb["entities"].insert_many(entities, session=session)
+                if claims:
+                    self.kdb["claims"].insert_many(claims, session=session)
+        except WriteConflict as exc:
+            raise InvalidInput("import conflicts with existing records; nothing was imported") from exc
         self._imported(["entities", "claims"])
         return {"entities": len(entities), "claims": len(claims)}
 

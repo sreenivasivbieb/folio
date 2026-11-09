@@ -1,6 +1,6 @@
 [project]
 name = "folio-core"
-version = "0.1.0"
+version = "0.2.0"
 description = "Folio core service: ingestion, speech, extraction, query and the event ledger (runs as the desktop app's sidecar)."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -16,7 +16,6 @@ dependencies = [
   "pillow>=10.4",
   "watchdog>=4.0",
   "sqlite-vec>=0.1.6",
-  "pymongo>=4.19.0",
 ]
 
 [project.optional-dependencies]
@@ -34,6 +33,7 @@ folio-core = "folio_core.main:cli"
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]
+build = ["pyinstaller>=6,<7"]
 
 [build-system]
 requires = ["hatchling"]

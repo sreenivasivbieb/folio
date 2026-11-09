@@ -1,147 +1,82 @@
-# Architecture
+# Current Folio architecture
 
-This maps the architecture proposal ("Local-First Voice Labeling & Knowledge Organization
-Platform", Nov 2026) onto the code. Decisions that refine the proposal are recorded as ADRs in
-[`docs/adr/`](adr/).
+Folio is a single-user local application: a React interface, a Tauri desktop shell and
+one supervised Python process bound to loopback. It runs independently of its source
+checkout. No developer-owned server, database or account handles user storage.
 
-## Runtime topology
+## Local storage
 
-```
-┌──────────────── Desktop shell · Tauri 2 (apps/desktop) ────────────────┐
-│  window · file/save dialogs · global hotkey (best effort)              │
-│  sidecar.rs: spawn core, per-session token, read FOLIO_READY, restart  │
-│  ┌──────────── UI · React + TS (apps/ui) ────────────┐                 │
-│  │ graph · swimlane · timeline · table · review ·    │                 │
-│  │ evidence viewer · voice bar                       │                 │
-│  └──────────────┬────────────────────────────────────┘                 │
-└─────────────────┼──────────────────────────────────────────────────────┘
-                  │ HTTP/JSON + SSE on 127.0.0.1:<random>, Bearer token,
-                  │ typed client generated from OpenAPI (packages/api-client)
-┌─────────────────▼──────── Core service · Python + FastAPI (services/core) ──┐
-│ ingestion (sandboxed parsers) · speech (mic + parser) · extraction · query  │
-│ jobs (SQLite queue) · learning · ledger · export · realtime (SSE)           │
-└───────┬─────────────────────────────┬───────────────────────────┬───────────┘
-        │ read/write (single writer)  │ run models                │ read-only
-┌───────▼────────────────────────┐ ┌──▼─────────────────────┐  ┌──▼─────────────────┐
-│ MongoDB (Docker, replica set)  │ │ LLM router: your key → │  │ your files         │
-│   knowledge + ledger, durable  │ │ OpenAI/OpenRouter/Qwen │  │ never copied/moved │
-│ index.db (SQLite), disposable  │ │ /Groq/Ollama/custom;   │  └────────────────────┘
-│   chunks · FTS5 · vectors · jobs│ │ rules if none · STT    │
-└────────────────────────────────┘ └────────────────────────┘
-```
+`store/local.py` stores JSON-shaped knowledge records inside a private local
+`knowledge.sqlite3` file. Its narrow document interface serves domain services without
+MongoDB. SQLite transactions commit changes, ledger events and sequence counters together;
+uniqueness constraints protect file paths and event sequences. Lookups for source paths,
+root membership and status have local indexes. A core process lock prevents two app
+instances from writing the same data folder.
 
-## Proposal component → code
+`store/index_db.py` holds the disposable local `index.db`: parsed chunks, FTS5 search,
+vectors, jobs, extraction issues and model cache. SQLite-vec is used when available and
+NumPy otherwise. Originals and durable knowledge are independent of this index.
 
-| Proposal component | Code |
-|---|---|
-| Desktop shell (Tauri, Rust) | `apps/desktop/src-tauri/src/lib.rs`, `sidecar.rs` |
-| UI (React, TS) | `apps/ui/src/` — views in `views/`, features in `features/` |
-| Core service (Python, FastAPI) | `services/core/src/folio_core/` — wiring in `container.py`, HTTP in `api/` |
-| Ingestion workers | `ingestion/` — `parsers/*` (pdf, image, docx, text/md, vtt/srt, audio/video), `sandbox.py`, `chunker.py`, `service.py`, `watcher.py` |
-| Speech to text | `providers/stt/` (faster-whisper + VAD), `speech/recorder.py`, `ingestion/parsers/media.py` |
-| Extraction | `extraction/` — `llm.py` (open-schema prompt), `rules.py` (offline fallback), `validate.py`, `resolver.py`, `service.py`; LLM routing in `providers/llm/router.py` |
-| Store | `store/mongo.py` (knowledge), `store/index_db.py` + `store/migrations/index/` (index), `store/repo.py`, `store/vectors.py` |
-| Query engine | `query/search.py` (FTS5 + vectors, RRF), `query/views.py` (recursive-CTE graph expansion), `query/card.py` |
-| Job queue | `jobs/queue.py`, `jobs/worker.py` |
-| Correction learning | `learning/store.py` |
-| Event log & feedback store | `ledger/ledger.py` |
+API keys and optional Google OAuth tokens stay in the user's `secrets.json` (0600),
+separate from knowledge exports. The app data folder is private (0700) on Linux. Rotating
+runtime/startup logs are in its `logs` subfolder.
 
-## Requirements → where they are met (and tested)
+## Scanning and processing
 
-| Req | Implementation | Test |
-|---|---|---|
-| FR-1 select/watch, read-only, hash skip | `ingestion/service.py` (`_track`, `index_source`), `watcher.py` | `test_ingestion.py::test_unchanged_file_costs_nothing…` |
-| FR-2 multimodal + locators | `ingestion/parsers/*`, `chunker.py` | `test_ingestion.py::test_every_chunk_has_a_locator` |
-| FR-3 voice labels, preview, questions | `speech/label_parser.py`, `speech/labels.py`, UI `features/voice/` | `test_labels.py` |
-| FR-4 extraction (open schema; hints guide, never reject) | `domain/schema.py`, `schema_packs/default.yaml`, `extraction/validate.py` | `test_extraction.py::test_validation…`, `test_knowledge.py::test_open_schema…` |
-| FR-5 entity card w/ source pointers | `query/card.py`, UI `features/entities/`, `features/evidence/` | `test_query_export.py::test_hybrid_search_and_entity_card` |
-| FR-6 four views, one model | `query/views.py`, UI `views/*`, SSE `api/routes/ledger.py` + `ui/src/api/events.ts` | `test_query_export.py::test_views_share_one_model` |
-| FR-7 edit/merge/split/retype/reject, undo | `knowledge/service.py`, `ledger/` | `test_knowledge.py`, `test_ledger.py` |
-| FR-8 learn from corrections | fingerprints in `domain/rules.py`, `knowledge.add_claim_tx`, `learning/store.py` | `test_extraction.py::test_rejected_claim_is_never_reproposed…` |
-| FR-9 export/import round trip | `export/exporters.py` | `test_query_export.py::test_json_round_trip…`, `…graphml…` |
-| FR-10 provenance & audit | `claims.extractor` (model + prompt version), ledger history | `test_ledger.py`, `/api/claims/{id}/history` |
-| NFR privacy: zero outbound | default providers are local; `providers/privacy.py` | `test_api_privacy.py::test_zero_outbound_network…` |
-| NFR reliability: forced kill | MongoDB transactions per ledger group, WAL index, `jobs.recover()` | `test_reliability.py` |
-| NFR cost: zero calls on unchanged data | content hash + model cache | `test_extraction.py::test_rerun_on_unchanged_data…` |
-| NFR extensibility | parser entry points `folio.parsers`, provider protocols + LLM presets, hint packs | — |
-| BYOK LLM, key never stored in DB/exports | `providers/llm/router.py`, `providers/secrets.py` | `test_llm_and_sources.py` |
-| NFR trust: precision gate | `evaluation.py`, `eval/golden/` | `test_query_export.py::test_golden_set_meets_precision_gate` |
+The file picker accepts any readable path. Scan my computer discovers Home and mounted
+drives and offers the readable filesystem plus custom paths. Root selection, hidden-file
+policy and exclusions are stored locally. Scans are resumable jobs, stream directory
+entries, skip symlinks and virtual/system data, and continue after individual permission
+errors. Unsupported formats get source metadata without reading their contents.
 
-## Data model
+Supported files are hashed, parsed in a limited subprocess when appropriate, chunked,
+embedded and proposed for extraction. Originals are read in place. A duplicate change
+received while a job runs schedules another pass rather than losing the update.
 
-Exactly the proposal's objects, with no fixed categories (ADR-0009):
+Forget/remove and short index commits share the local knowledge writer guard. A parser
+or model can finish outside that guard, but its result is discarded if the source was
+forgotten, removed or changed. Failed extraction chunks retain prior proposals; only
+successfully processed chunks participate in stale-result pruning.
 
-* **MongoDB** (`folio` database) — `settings`, `schema_versions` (type *hints*), `roots`,
-  `sources`, `entities` (aliases embedded), `claims` (evidence embedded), `labels`,
-  `event_groups`, `events` (append-only), `counters`.
-* **index.db** (SQLite) — `chunks` (+ `chunks_fts` FTS5), `chunk_vec` (sqlite-vec) or
-  `chunk_vectors` (numpy fallback), `model_cache`, `jobs`, `extraction_issues`,
-  `merge_suggestions`.
+## Knowledge and views
 
-Entity `type` and claim `predicate` are free strings; `value` is any JSON value. Hints add
-colours, spoken phrases and date parsing, and are passed to the LLM as suggestions.
+KnowledgeService owns entity and claim edits. Ledger groups record row snapshots and
+provide undo/redo and provenance. Model results remain proposals until reviewed. The graph,
+swimlane, timeline and table share the same underlying claims. Files and table rows use
+server pagination and sorting with loading/error/retry states.
 
-The unit of knowledge is the **claim**. A relation is a claim whose `object_id` is an entity, so
-graph, timeline and swimlane are projections of the same rows. Built-in predicates:
-`represented_by` (this entity *is* this file), `mentions` (document → entity), `mentioned`
-(dated mention; feeds the timeline when no typed date attribute fits).
+The core publishes transient SSE events. The UI refreshes caches when the stream reconnects
+and probes the authenticated backend with bounded requests. A desktop backend restart
+re-resolves its new port; failed startup shows retry controls and the actual log location.
 
-Evidence stores `source_id + locator + quote`, not just a chunk id, so it survives deleting and
-rebuilding `index.db`.
+JSON and GraphML imports validate records first and write inside one local transaction.
+A failed or conflicting import leaves the existing project intact. Native exports write
+to a temporary sibling and rename only after the complete data is synced.
 
-### The trust rules, as code
+## Optional user-owned connections
 
-1. *Every claim has evidence or is a user assertion* — `KnowledgeService.add_claim_tx` refuses a
-   model claim without evidence; `extraction/validate.py` refuses a quote that is not a real span.
-2. *Re-extraction only proposes* — a claim's `fingerprint` (subject, predicate, value/object) is
-   checked on every write; a model can never re-add a rejected fact or alter a verified one.
-3. *Merges rewrite no history* — merges are ledger groups; undo restores every row.
-4. *Same claims feed every view* — `query/views.py`.
+Local rules, hashing embeddings and local AI need no hosted inference account. A user may
+choose a hosted OpenAI-compatible model with their own key; file text is then processed
+by that provider, while Folio's working state remains local. Loopback AI ignores HTTP proxy
+environment variables so a nominally local connection does not use an outbound proxy.
 
-## Flows
+Google Drive backup is optional and uses that user's own Desktop OAuth client and account.
+OAuth opens the system browser, uses PKCE/state and returns to the local core. Tokens stay
+in the local credentials file. The app requests drive.file access only for its own backups.
+No original files or API keys enter a knowledge backup, and upload requires an explicit
+Back up now action. Restore validates and imports into an empty local project.
 
-**Indexing.** `POST /roots` → scan → `sources` rows → job `index_source`: hash unchanged → stop;
-else parse in a sandboxed subprocess → chunk → embed (reusing vectors of unchanged chunks) →
-replace chunks → job `extract_source`.
+## Packaging and validation limits
 
-**Extraction.** Per chunk: model-cache lookup (hash, model, prompt version, schema version) → run
-extractor → validate → resolve names to entities (exact alias, else new `auto` entity + merge
-*suggestion*) → write `proposed` claims via `KnowledgeService` (blocked if rejected before) →
-prune stale proposals of this source.
+The Omarchy builder embeds production UI assets, builds a Python sidecar, and creates an
+Arch x86_64 package and portable archive with checksums. Installed builds use the adjacent
+sidecar and never fall back to the developer checkout. Runtime libraries are declared in
+the package. No Docker, MongoDB or Python development environment is required by the app.
 
-**Voice label.** Hold to talk → core records WAV → transcribe with the personal vocabulary as
-prompt → parse into a plan (ops + questions) → preview → user answers questions → confirm →
-one ledger group (`actor=voice`), audio + transcript are the evidence.
+Tests cover local persistence, rollback, crash recovery, extraction failure, forget races,
+scan exclusions, metadata inventory, pagination, credentials and connection health.
+Provider fixtures are not live AI quality evidence. Google Drive's live OAuth and account
+permissions must still be checked with the user's own credentials. Whole-machine indexing
+performance and native Wayland behavior require testing on real target installations.
 
-**Live updates.** Every committed ledger group is published on the in-process bus → SSE →
-the UI invalidates its queries → all views re-render.
-
-## Security
-
-* Core binds `127.0.0.1`, random port; per-session token (constant-time compare); Origin allow-list.
-* Untrusted files are parsed in a subprocess with an address-space limit and a timeout.
-* Prompt injection: file text is data; the model has no tools; only well-formed claims whose
-  quote is a literal span of the chunk are accepted.
-* Cloud providers are blocked unless `cloud.enabled` is set for the project (badge in the top bar);
-  choosing a hosted LLM in Settings is that opt-in.
-* API keys live in `<data_dir>/secrets.json` (0600) — never in MongoDB, the ledger, exports or API
-  responses. MongoDB is bound to 127.0.0.1 only.
-* Models (speech) are downloaded only by an explicit user action, with progress.
-
-## Known gaps / next steps
-
-* **Packaging** (Phase 0 spike): `scripts/build-sidecar.sh` + `.github/workflows/release.yml`
-  produce the PyInstaller sidecar and installers but have not been validated on all three OSes.
-* **Image understanding** is OCR only; captions/CLIP embeddings plug in behind the provider
-  interface. Video keyframes are not extracted yet (the audio track is transcribed).
-* **Label parsing** is an English rule grammar. Mixed Hindi/English speech is transcribed by the
-  multilingual Whisper model, but understanding free-form or mixed-language labels needs an LLM
-  label parser producing the same plan format.
-* **Without an AI model the rule extractor finds very little** in real documents (ADR-0010). Real
-  quality needs a model (Settings → AI model) and a golden set built from your own files.
-* **MongoDB needs Docker** (ADR-0009): the desktop installer no longer works without it. The core
-  waits ~20 s for MongoDB at start and otherwise exits with a clear message.
-* Real LLM extraction has been exercised end to end through the router with a local
-  OpenAI-compatible test double, not yet against a hosted provider with a real key.
-* Phase 2+ (active learning, contradiction detection beyond single-valued attributes, dataset
-  export, file moves, encrypted store, sync) are out of v1 scope by design.
+Older ADRs describe previous storage designs; ADR-0011 supersedes the MongoDB requirement.

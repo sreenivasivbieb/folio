@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from .. import __version__
 from ..container import Container
 from ..domain.errors import Conflict, InvalidInput, NotFound, PrivacyBlocked, Unavailable
-from .routes import data, knowledge, labels, ledger, sources, system, views
+from .routes import data, drive, knowledge, labels, ledger, sources, system, views
 from .security import TokenAuthMiddleware
 
 ERROR_STATUS = {NotFound: 404, Conflict: 409, InvalidInput: 422, PrivacyBlocked: 403, Unavailable: 503}
@@ -27,6 +27,8 @@ def create_app(container: Container, token: str, start_background: bool = True) 
             container.stop()
 
     app = FastAPI(title="Folio Core", version=__version__, lifespan=lifespan,
+                  telemetry={"tracing": False, "metrics": False, "logs": False,
+                             "operation_spans": False, "auto_configure": False},
                   description="Local-first voice labeling & knowledge organization — core service.")
     app.state.container = container
 
@@ -35,7 +37,7 @@ def create_app(container: Container, token: str, start_background: bool = True) 
             return JSONResponse({"detail": str(exc)}, status_code=status)
         app.add_exception_handler(exc_type, handler)
 
-    for module in (system, sources, knowledge, views, labels, ledger, data):
+    for module in (system, sources, knowledge, views, labels, ledger, data, drive):
         app.include_router(module.router, prefix="/api")
 
     # Added last = outermost: CORS answers preflights before the token check runs.

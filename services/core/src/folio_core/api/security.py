@@ -13,7 +13,7 @@ import json
 
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-OPEN_PATHS = {"/api/health"}
+OPEN_PATHS = {"/api/health", "/api/drive/callback"}  # OAuth callback validates its own single-use PKCE state.
 
 
 class TokenAuthMiddleware:

@@ -1,3 +1,5 @@
+> Superseded by [ADR-0011](0011-local-user-owned-storage.md) for the current storage implementation.
+
 # 0009 — Knowledge in MongoDB (Docker), open schema
 
 **Status.** Accepted (product owner's decision, 2026-11-08). Supersedes the storage part of

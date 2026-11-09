@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 import numpy as np
 
 from ..providers.embeddings.base import Embedder
-from ..store.mongo import KnowledgeDB
+from ..store.local import KnowledgeDB
 
 
 @dataclass(frozen=True)
@@ -74,22 +75,19 @@ class CorrectionStore:
 
     def acceptance(self) -> list[dict[str, Any]]:
         """Acceptance rate of model-proposed claims per entity type per ISO week (release metric)."""
-        rows = list(self.kdb["claims"].aggregate([
-            {"$match": {"extractor.kind": "model"}},
-            {"$lookup": {"from": "entities", "localField": "subject_id", "foreignField": "_id", "as": "s"}},
-            {"$unwind": "$s"},
-            {"$group": {
-                "_id": {"type": "$s.type", "week": {"$dateToString": {"format": "%G-W%V", "date": {"$dateFromString": {"dateString": "$created_at"}}}}},
-                "verified": {"$sum": {"$cond": [{"$eq": ["$status", "verified"]}, 1, 0]}},
-                "rejected": {"$sum": {"$cond": [{"$eq": ["$status", "rejected"]}, 1, 0]}},
-                "proposed": {"$sum": {"$cond": [{"$eq": ["$status", "proposed"]}, 1, 0]}},
-            }},
-            {"$sort": {"_id.week": 1}},
-        ]))
-        out = []
-        for r in rows:
-            decided = r["verified"] + r["rejected"]
-            out.append({"type": r["_id"]["type"], "week": r["_id"]["week"], "verified": r["verified"],
-                        "rejected": r["rejected"], "proposed": r["proposed"],
-                        "rate": r["verified"] / decided if decided else None})
+        buckets = {}
+        for claim in self.kdb["claims"].find({"extractor.kind": "model"}):
+            subject = self.kdb["entities"].find_one({"_id": claim["subject_id"]})
+            if not subject:
+                continue
+            calendar = datetime.fromisoformat(claim["created_at"]).isocalendar()
+            week = f"{calendar.year}-W{calendar.week:02d}"
+            key = (subject["type"], week)
+            row = buckets.setdefault(key, {"type": key[0], "week": week, "verified": 0, "rejected": 0, "proposed": 0})
+            if claim["status"] in ("verified", "rejected", "proposed"):
+                row[claim["status"]] += 1
+        out = sorted(buckets.values(), key=lambda row: (row["week"], row["type"]))
+        for row in out:
+            decided = row["verified"] + row["rejected"]
+            row["rate"] = row["verified"] / decided if decided else None
         return out

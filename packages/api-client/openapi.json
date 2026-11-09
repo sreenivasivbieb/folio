@@ -3,7 +3,7 @@
   "info": {
     "title": "Folio Core",
     "description": "Local-first voice labeling & knowledge organization — core service.",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "paths": {
     "/api/health": {
@@ -460,6 +460,18 @@
               ],
               "title": "Root Id"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 1,
+              "default": 1000,
+              "title": "Limit"
+            }
           }
         ],
         "responses": {
@@ -473,6 +485,93 @@
                     "$ref": "#/components/schemas/Source"
                   },
                   "title": "Response List Sources Api Sources Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scan/locations": {
+      "get": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "Locations",
+        "operationId": "locations_api_scan_locations_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanLocations"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/files": {
+      "get": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "File Page",
+        "operationId": "file_page_api_files_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourcePage"
                 }
               }
             }
@@ -709,7 +808,7 @@
           "sources"
         ],
         "summary": "Rebuild Index",
-        "description": "Empty index.db and re-index everything. Knowledge (MongoDB) is untouched.",
+        "description": "Empty index.db and re-index everything. Local knowledge is untouched.",
         "operationId": "rebuild_index_api_index_rebuild_post",
         "responses": {
           "200": {
@@ -1995,8 +2094,21 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "default": 1000,
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
               "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
             }
           }
         ],
@@ -3051,6 +3163,263 @@
           }
         }
       }
+    },
+    "/api/drive": {
+      "get": {
+        "tags": [
+          "drive"
+        ],
+        "summary": "Status",
+        "operationId": "status_api_drive_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriveStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "drive"
+        ],
+        "summary": "Disconnect",
+        "operationId": "disconnect_api_drive_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/drive/connect": {
+      "post": {
+        "tags": [
+          "drive"
+        ],
+        "summary": "Connect",
+        "operationId": "connect_api_drive_connect_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriveConnect"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriveAuthorization"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/drive/callback": {
+      "get": {
+        "tags": [
+          "drive"
+        ],
+        "summary": "Callback",
+        "operationId": "callback_api_drive_callback_get",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "State"
+            }
+          },
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Code"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Error"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/drive/backups": {
+      "get": {
+        "tags": [
+          "drive"
+        ],
+        "summary": "Backups",
+        "operationId": "backups_api_drive_backups_get",
+        "parameters": [
+          {
+            "name": "page_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriveBackups"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "drive"
+        ],
+        "summary": "Backup",
+        "operationId": "backup_api_drive_backups_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriveBackup"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/drive/restore": {
+      "post": {
+        "tags": [
+          "drive"
+        ],
+        "summary": "Restore",
+        "operationId": "restore_api_drive_restore_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriveRestore"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "integer"
+                  },
+                  "type": "object",
+                  "title": "Response Restore Api Drive Restore Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3110,6 +3479,25 @@
             "type": "boolean",
             "title": "Watch",
             "default": true
+          },
+          "include_hidden": {
+            "type": "boolean",
+            "title": "Include Hidden",
+            "default": false
+          },
+          "exclude": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exclude"
           }
         },
         "type": "object",
@@ -3596,6 +3984,146 @@
           "name"
         ],
         "title": "CreateEntity"
+      },
+      "DriveAuthorization": {
+        "properties": {
+          "authorization_url": {
+            "type": "string",
+            "title": "Authorization Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "authorization_url"
+        ],
+        "title": "DriveAuthorization"
+      },
+      "DriveBackup": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "modifiedTime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modifiedtime"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "DriveBackup"
+      },
+      "DriveBackups": {
+        "properties": {
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/DriveBackup"
+            },
+            "type": "array",
+            "title": "Files"
+          },
+          "nextPageToken": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextpagetoken"
+          }
+        },
+        "type": "object",
+        "required": [
+          "files"
+        ],
+        "title": "DriveBackups"
+      },
+      "DriveConnect": {
+        "properties": {
+          "client_id": {
+            "type": "string",
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Secret"
+          }
+        },
+        "type": "object",
+        "required": [
+          "client_id"
+        ],
+        "title": "DriveConnect"
+      },
+      "DriveRestore": {
+        "properties": {
+          "file_id": {
+            "type": "string",
+            "title": "File Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file_id"
+        ],
+        "title": "DriveRestore"
+      },
+      "DriveStatus": {
+        "properties": {
+          "connected": {
+            "type": "boolean",
+            "title": "Connected"
+          },
+          "client_id": {
+            "type": "string",
+            "title": "Client Id"
+          },
+          "secret_configured": {
+            "type": "boolean",
+            "title": "Secret Configured"
+          }
+        },
+        "type": "object",
+        "required": [
+          "connected",
+          "client_id",
+          "secret_configured"
+        ],
+        "title": "DriveStatus"
       },
       "EditClaim": {
         "properties": {
@@ -4940,6 +5468,18 @@
           "created_at": {
             "type": "string",
             "title": "Created At"
+          },
+          "include_hidden": {
+            "type": "boolean",
+            "title": "Include Hidden",
+            "default": false
+          },
+          "exclude": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Exclude"
           }
         },
         "type": "object",
@@ -4951,6 +5491,61 @@
           "created_at"
         ],
         "title": "Root"
+      },
+      "ScanLocation": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "label",
+          "kind"
+        ],
+        "title": "ScanLocation"
+      },
+      "ScanLocations": {
+        "properties": {
+          "locations": {
+            "items": {
+              "$ref": "#/components/schemas/ScanLocation"
+            },
+            "type": "array",
+            "title": "Locations"
+          },
+          "default_exclusions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Default Exclusions"
+          },
+          "supported_extensions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Supported Extensions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "locations",
+          "default_exclusions",
+          "supported_extensions"
+        ],
+        "title": "ScanLocations"
       },
       "SchemaBody": {
         "properties": {
@@ -5128,9 +5723,41 @@
           "text",
           "subtitle",
           "audio",
-          "video"
+          "video",
+          "other"
         ],
         "title": "SourceKind"
+      },
+      "SourcePage": {
+        "properties": {
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/Source"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sources",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "SourcePage"
       },
       "SourceStatus": {
         "type": "string",
@@ -5141,7 +5768,8 @@
           "failed",
           "missing",
           "forgotten",
-          "removed"
+          "removed",
+          "metadata"
         ],
         "title": "SourceStatus"
       },
@@ -5311,6 +5939,21 @@
             },
             "type": "object",
             "title": "Entities"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset",
+            "default": 0
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit",
+            "default": 100
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More",
+            "default": false
           }
         },
         "type": "object",

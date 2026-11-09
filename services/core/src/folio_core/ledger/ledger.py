@@ -5,13 +5,12 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
-from pymongo.client_session import ClientSession
-
 from ..domain.errors import Conflict, NotFound
 from ..domain.ids import new_id
 from ..realtime import Bus
 from ..store.index_db import utcnow
-from ..store.mongo import KnowledgeDB, to_doc, to_row
+from ..store.local import KnowledgeDB, to_doc, to_row
+from ..store.local import Session as ClientSession
 
 # Collections whose documents are user knowledge. Only these are written through the ledger.
 TRACKED = frozenset({"settings", "schema_versions", "roots", "entities", "claims", "labels"})

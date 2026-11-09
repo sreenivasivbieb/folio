@@ -3,7 +3,7 @@ import type { Source } from "@folio/api-client";
 import { useState } from "react";
 import { unwrap, useApi } from "@/api/client";
 import { inTauri } from "@/api/connection";
-import { useAction, useJobs, useRoots, useSources } from "@/api/queries";
+import { useAction, useFilePage, useJobs, useRoots } from "@/api/queries";
 import { Icon, kindIcon } from "@/components/Icon";
 import { basename } from "@/lib/format";
 import { selectSource, ui } from "@/state/selection";
@@ -22,7 +22,7 @@ export function useAddRoot() {
   return useAction(async (directory: boolean) => {
     const path = await pickPath(directory);
     if (!path) return null;
-    return unwrap(await client.POST("/api/roots", { body: { path, watch: true } }));
+    return unwrap(await client.POST("/api/roots", { body: { path, watch: true, include_hidden: false } }));
   }, "Added — indexing in the background");
 }
 
@@ -30,15 +30,18 @@ function statusLine(s: Source, progress?: { p: number; m: string | null }): stri
   if (s.status === "indexing" && progress) return progress.m ?? `${Math.round(progress.p * 100)}%`;
   if (s.status === "failed") return s.error?.split("\n")[0] ?? "failed";
   if (s.status === "indexed") return `${s.kind} · ${(s.size / 1024 / 1024).toFixed(s.size > 1024 * 1024 ? 1 : 2)} MB`;
+  if (s.status === "metadata") return "Metadata only · content format not supported";
   return s.status;
 }
 
 export function SourcesPanel() {
   const { client } = useApi();
   const { data: roots } = useRoots();
-  const { data: sources } = useSources();
   const { data: jobs } = useJobs();
   const [filter, setFilter] = useState("");
+  const [offset, setOffset] = useState(0);
+  const { data: page, isPending, error, refetch } = useFilePage(filter, offset);
+  const sources = page?.sources;
   const active = ui.use((s) => (s.selection.kind === "source" ? s.selection.id : null));
   const addRoot = useAddRoot();
   const removeRoot = useAction(async (id: string) => unwrap(await client.DELETE("/api/roots/{root_id}", { params: { path: { root_id: id } } })), "Folder removed — its knowledge is kept");
@@ -50,10 +53,11 @@ export function SourcesPanel() {
 
   const running = new Map((jobs ?? []).filter((j) => j.status === "running" && j.kind === "index_source")
     .map((j) => [String(j.payload.source_id), { p: j.progress, m: j.message }]));
-  const shown = (sources ?? []).filter((s) => !filter || s.path.toLowerCase().includes(filter.toLowerCase()));
+  const shown = sources ?? [];
 
   return (
     <>
+      <div style={{ padding: "10px 12px" }}><button type="button" className="btn primary" style={{ width: "100%" }} onClick={() => ui.set({ modal: "scan" })}><Icon name="search" /> Scan my computer</button></div>
       <div className="sidebar-head">
         <h2>Folders</h2>
         <button type="button" className="btn sm" onClick={() => addRoot.mutate(true)} title="Add a folder"><Icon name="folder" size={13} /> Add</button>
@@ -70,15 +74,17 @@ export function SourcesPanel() {
       ))}
       <div className="sidebar-head" style={{ paddingTop: 14 }}>
         <h2>Files</h2>
-        <span className="tiny muted">{sources?.length ?? 0}</span>
+        <span className="tiny muted">{page?.total ?? 0}</span>
       </div>
-      {(sources?.length ?? 0) > 6 && (
+      {((page?.total ?? 0) > 6 || !!filter) && (
         <div style={{ padding: "0 12px 8px" }}>
-          <input className="input" style={{ width: "100%" }} placeholder="Filter files…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+          <input className="input" style={{ width: "100%" }} placeholder="Search all file paths…" value={filter} onChange={(e) => { setFilter(e.target.value); setOffset(0); }} />
         </div>
       )}
       <div className="scroll">
-        {!sources?.length && <div className="empty-inline">Add a folder to begin. Your files stay where they are and are never modified.</div>}
+        {isPending && <p role="status" className="empty-inline">Loading files…</p>}
+        {error && <div role="alert" className="empty-inline">Could not load files. <button type="button" className="btn sm" onClick={() => void refetch()}>Retry</button></div>}
+        {!isPending && !error && !sources?.length && <div className="empty-inline">{filter ? "No files match this search." : "Add a folder or scan your computer to begin."}</div>}
         {shown.map((s) => (
           <div key={s.id} className={`list-row ${active === s.id ? "active" : ""}`} onClick={() => selectSource(s.id)} title={s.error ?? s.path}>
             <div className="file-icon"><Icon name={kindIcon(s.kind)} size={14} /></div>
@@ -92,12 +98,17 @@ export function SourcesPanel() {
             {s.status !== "indexed" && s.status !== "indexing" && <span className={`badge ${s.status}`}>{s.status}</span>}
             {s.status === "indexing" && <Icon name="loader" size={14} spin className="muted" />}
             <div className="row-actions">
-              <button type="button" className="btn ghost sm icon-only" title="Re-index" onClick={(e) => { e.stopPropagation(); reindex.mutate(s.id); }}><Icon name="refresh" size={13} /></button>
+              {s.kind !== "other" && <button type="button" className="btn ghost sm icon-only" title="Re-index" onClick={(e) => { e.stopPropagation(); reindex.mutate(s.id); }}><Icon name="refresh" size={13} /></button>}
               <button type="button" className="btn ghost sm icon-only danger" title="Forget this file" onClick={(e) => { e.stopPropagation(); forget.mutate(s.id); }}><Icon name="trash" size={13} /></button>
             </div>
           </div>
         ))}
       </div>
+      {!!page?.total && <div className="row" style={{ padding: 10 }}>
+        <button type="button" className="btn sm" disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 100))}>Previous</button>
+        <span className="small muted">{offset + 1}–{offset + shown.length} / {page.total}</span>
+        <button type="button" className="btn sm" disabled={offset + shown.length >= page.total} onClick={() => setOffset(offset + 100)}>Next</button>
+      </div>}
     </>
   );
 }

@@ -37,10 +37,6 @@ class Settings:
         "http://127.0.0.1:1420",
     )
 
-    # Knowledge store: MongoDB (single-node replica set, see docker-compose.yml).
-    mongo_uri: str = "mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true"
-    mongo_db: str = "folio"
-
     # Providers (see providers/registry.py). The LLM is configured per project in the UI
     # (bring your own key); without one, the offline rule extractor is used.
     embedder: str = "hashing"  # hashing | fastembed
@@ -78,7 +74,7 @@ class Settings:
         mapping: dict[str, object] = {}
         if v := env.get("FOLIO_DATA_DIR"):
             mapping["data_dir"] = Path(v)
-        for key in ("token", "mongo_uri", "mongo_db", "embedder", "embed_model", "stt", "stt_model"):
+        for key in ("token", "embedder", "embed_model", "stt", "stt_model"):
             if v := env.get(f"FOLIO_{key.upper()}"):
                 mapping[key] = v
         for key in ("port", "workers", "parse_timeout_s", "parse_memory_mb"):

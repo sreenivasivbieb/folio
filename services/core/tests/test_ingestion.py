@@ -19,6 +19,10 @@ def test_every_chunk_has_a_locator(container, files):
     conn = container.kdb
     by_kind = {}
     for src in repo.list_sources(conn):
+        if src.kind.value == "other":
+            assert src.status == SourceStatus.METADATA
+            assert not repo.chunks_for_source(container.index.reader(), src.id)
+            continue
         assert src.status == SourceStatus.INDEXED, (src.path, src.error)
         for ch in repo.chunks_for_source(container.index.reader(), src.id):
             by_kind.setdefault(src.kind.value, []).append(ch.locator)
@@ -27,8 +31,8 @@ def test_every_chunk_has_a_locator(container, files):
     assert pdf.kind == "page" and pdf.page == 1 and pdf.rect and pdf.rect[2] > pdf.rect[0]
     assert all(loc.kind == "time" and loc.end >= loc.start for loc in by_kind["subtitle"])
     assert all(loc.kind == "text" and loc.line_start >= 1 for loc in by_kind["markdown"])
-    # unsupported files are ignored, originals untouched
-    assert not any(s.path.endswith(".xyz") for s in repo.list_sources(conn))
+    # Unsupported formats are inventoried without parsing their contents.
+    assert any(s.path.endswith(".xyz") and s.status == SourceStatus.METADATA for s in repo.list_sources(conn))
 
 
 def test_unchanged_file_costs_nothing_changed_file_reindexes(container, files):

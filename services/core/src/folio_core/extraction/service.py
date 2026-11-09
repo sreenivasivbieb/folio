@@ -27,7 +27,7 @@ from ..ledger import Ledger, Tx
 from ..providers.privacy import ensure_allowed
 from ..store import repo
 from ..store.index_db import IndexDB, utcnow
-from ..store.mongo import KnowledgeDB
+from ..store.local import KnowledgeDB
 from .resolver import EntityResolver
 from .rules import DOCUMENT_REF
 from .types import ExtractionContext, ExtractionFailed, ExtractionOutput
@@ -79,6 +79,7 @@ class ExtractionService:
         actor = f"model:{extractor.model_id}"
         meta = Extractor(kind="model", model=extractor.model_id, prompt_version=extractor.prompt_version)
         produced: set[str] = set()
+        failed_chunks: set[str] = set()
         stats = {"created": 0, "merged": 0, "blocked": 0, "cached": 0, "failed": 0}
 
         for i, chunk in enumerate(chunks):
@@ -99,6 +100,7 @@ class ExtractionService:
                 except ExtractionFailed as exc:
                     self._record_issue(src.id, chunk.id, str(exc), exc.raw)
                     stats["failed"] += 1
+                    failed_chunks.add(chunk.id)
                     continue
                 with self.index.write() as conn:
                     repo.cache_put(conn, key, "extract", extractor.model_id, out.model_dump())
@@ -106,6 +108,10 @@ class ExtractionService:
             if not out.claims:
                 continue
             with self.ledger.group(actor, "extract", doc_name) as tx:
+                current = repo.get_source(self.kdb, src.id)
+                if (current is None or current.status != SourceStatus.INDEXED
+                        or current.indexed_hash != src.indexed_hash):
+                    return "cancelled: source changed or is no longer tracked"
                 doc_entity: str | None = None
                 for c in out.claims:
                     if c.subject == DOCUMENT_REF:
@@ -136,7 +142,7 @@ class ExtractionService:
             if new_entities:  # later chunks should know the names found so far
                 gazetteer = self.learning.gazetteer(include_rejected=True)
 
-        pruned = self._prune(src, {c.id for c in chunks}, produced, actor)
+        pruned = self._prune(src, {c.id for c in chunks}, produced, actor, failed_chunks)
         return (f"{extractor.model_id}: {stats['created']} new, {stats['merged']} reinforced, "
                 f"{stats['blocked']} blocked by corrections, {pruned} stale removed, "
                 f"{stats['cached']} cached, {stats['failed']} failed")
@@ -154,22 +160,26 @@ class ExtractionService:
                                     status=ClaimStatus.VERIFIED, extractor=Extractor(kind="system"))
         return entity["id"]
 
-    def _prune(self, src: Source, live_chunks: set[str], produced: set[str], actor: str) -> int:
-        stale = [c for c in self.kdb["claims"].find({"evidence.source_id": src.id, "status": "proposed",
-                                                     "extractor.kind": "model"})
-                 if c["_id"] not in produced
-                 or any(e.get("source_id") == src.id and e.get("chunk_id") not in live_chunks for e in c["evidence"])]
-        if not stale:
-            return 0
+    def _prune(self, src: Source, live_chunks: set[str], produced: set[str], actor: str,
+               failed_chunks: set[str] | None = None) -> int:
+        failed_chunks = failed_chunks or set()
         removed = 0
         with self.ledger.group(actor, "extract.prune", Path(src.path).name) as tx:
-            for c in stale:
+            current = repo.get_source(self.kdb, src.id)
+            if (current is None or current.status != SourceStatus.INDEXED
+                    or current.indexed_hash != src.indexed_hash):
+                return 0
+            for c in tx.find("claims", {"evidence.source_id": src.id, "status": "proposed",
+                                         "extractor.kind": "model"}):
                 keep = [e for e in c["evidence"]
-                        if e.get("source_id") != src.id or (c["_id"] in produced and e.get("chunk_id") in live_chunks)]
+                        if e.get("source_id") != src.id or e.get("chunk_id") in failed_chunks
+                        or (c["id"] in produced and e.get("chunk_id") in live_chunks)]
+                if keep == c["evidence"]:
+                    continue
                 if keep:
-                    tx.update("claims", c["_id"], {"evidence": keep})
+                    tx.update("claims", c["id"], {"evidence": keep})
                 else:
-                    tx.delete("claims", c["_id"])
+                    tx.delete("claims", c["id"])
                     removed += 1
             # Auto entities left with no claims at all are noise: remove them.
             for e in tx.find("entities", {"status": "auto", "created_by": actor}):

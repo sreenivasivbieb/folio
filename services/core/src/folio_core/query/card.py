@@ -9,7 +9,7 @@ from typing import Any
 from ..domain.errors import NotFound
 from ..domain.schema import MENTIONS, REPRESENTED_BY
 from ..store import repo
-from ..store.mongo import KnowledgeDB
+from ..store.local import KnowledgeDB
 from .search import HybridSearch
 
 

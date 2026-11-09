@@ -13,7 +13,7 @@ from typing import Any
 from ..domain.schema import MENTIONS, REPRESENTED_BY, SchemaDef
 from ..store import repo
 from ..store.index_db import IndexDB
-from ..store.mongo import KnowledgeDB
+from ..store.local import KnowledgeDB
 
 NOT_REVIEW_WORK = [MENTIONS, REPRESENTED_BY]
 _DATE_SUFFIXES = ("_on", "_date", "_at", "_since", "_until")
@@ -34,12 +34,16 @@ class ReviewQueue:
 
     def conflicts(self) -> list[dict[str, Any]]:
         _v, schema = repo.active_schema(self.kdb)
-        groups = list(self.kdb["claims"].aggregate([
-            {"$match": {"kind": "attribute", "status": {"$ne": "rejected"}, "predicate": {"$nin": NOT_REVIEW_WORK + ["mentioned"]}}},
-            {"$group": {"_id": {"s": "$subject_id", "p": "$predicate"}, "values": {"$addToSet": "$value"},
-                        "ids": {"$push": "$_id"}, "proposed": {"$sum": {"$cond": [{"$eq": ["$status", "proposed"]}, 1, 0]}}}},
-            {"$match": {"values.1": {"$exists": True}, "proposed": {"$gt": 0}}},
-        ]))
+        buckets = {}
+        for claim in self.kdb["claims"].find({"kind": "attribute", "status": {"$ne": "rejected"},
+                                               "predicate": {"$nin": NOT_REVIEW_WORK + ["mentioned"]}}):
+            key = (claim["subject_id"], claim["predicate"])
+            group = buckets.setdefault(key, {"_id": {"s": key[0], "p": key[1]}, "values": [], "ids": [], "proposed": 0})
+            if claim["value"] not in group["values"]:
+                group["values"].append(claim["value"])
+            group["ids"].append(claim["_id"])
+            group["proposed"] += claim["status"] == "proposed"
+        groups = [group for group in buckets.values() if len(group["values"]) > 1 and group["proposed"]]
         ents = repo.get_entities(self.kdb, [g["_id"]["s"] for g in groups])
         out = []
         for g in groups:

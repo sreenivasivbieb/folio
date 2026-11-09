@@ -1,8 +1,8 @@
 """index.db — the disposable SQLite store: chunks, full-text + vector index, model cache, jobs.
 
-Everything here can be rebuilt from the files plus the knowledge store (MongoDB), so deleting
+Everything here can be rebuilt from the files plus the local knowledge file, so deleting
 the file is always safe. SQLite stays because it gives FTS5 and sqlite-vec in-process with no
-server, which MongoDB Community does not offer.
+server.
 
 Concurrency: **one writer** (process lock + ``BEGIN IMMEDIATE``); reads use a connection per
 thread and run concurrently in WAL mode.

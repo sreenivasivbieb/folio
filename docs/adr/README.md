@@ -15,3 +15,5 @@ architecture proposal. Format: context → decision → consequences. Status is 
 | [0008](0008-live-updates-sse.md) | Server-sent events for live updates across views |
 | [0009](0009-mongodb-open-schema.md) | Knowledge in MongoDB (Docker), open schema — supersedes 0002's storage |
 | [0010](0010-byok-llm-and-explicit-downloads.md) | Bring-your-own-key LLM routing; models download only on request |
+
+- [0011 — User-owned local storage and connections](0011-local-user-owned-storage.md)

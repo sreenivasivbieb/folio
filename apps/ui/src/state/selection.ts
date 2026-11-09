@@ -14,7 +14,7 @@ export type Selection =
 
 export type ViewName = "graph" | "swimlane" | "timeline" | "table";
 export type LeftTab = "sources" | "review" | "activity";
-export type SettingsTab = "ai" | "voice" | "privacy" | "hints" | "data";
+export type SettingsTab = "ai" | "voice" | "privacy" | "hints" | "data" | "drive";
 
 interface UiState {
   selection: Selection;
@@ -25,7 +25,7 @@ interface UiState {
   openSourceId: string | null; // a whole file opened from the sources list
   label: Label | null; // label preview awaiting confirmation
   recording: boolean;
-  modal: "none" | "search" | "settings";
+  modal: "none" | "search" | "settings" | "scan";
   settingsTab: SettingsTab;
 }
 

@@ -36,6 +36,8 @@ export function useCoreEvents(): void {
     };
 
     const es = new EventSource(authedUrl(conn, "/api/events/stream"));
+    // Events are transient. Re-fetch after every reconnection to recover missed changes.
+    es.onopen = () => { void qc.invalidateQueries(); };
     es.onmessage = (msg) => {
       const ev = JSON.parse(msg.data) as CoreEvent;
       switch (ev.type) {
@@ -43,10 +45,10 @@ export function useCoreEvents(): void {
           schedule(...KNOWLEDGE_KEYS, ...(ev.tables.includes("roots") ? ["roots", "sources"] : []));
           break;
         case "job":
-          schedule("jobs", "status");
+          schedule("jobs", "status", "files");
           break;
         case "source":
-          schedule("sources", "source", "chunks", "status");
+          schedule("sources", "source", "chunks", "status", "files");
           break;
         case "voice":
           setVoiceRecording(ev.recording);

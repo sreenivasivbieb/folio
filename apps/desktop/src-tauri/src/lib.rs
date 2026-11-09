@@ -18,7 +18,7 @@ use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, ShortcutState};
 #[tauri::command]
 async fn core_connection(sidecar: tauri::State<'_, Sidecar>) -> Result<Connection, String> {
     let sidecar = sidecar.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || sidecar.connection(Duration::from_secs(90)))
+    tauri::async_runtime::spawn_blocking(move || sidecar.connection(Duration::from_secs(2)))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -26,7 +26,80 @@ async fn core_connection(sidecar: tauri::State<'_, Sidecar>) -> Result<Connectio
 /// Write an export the user chose a location for (path comes from the native save dialog).
 #[tauri::command]
 fn save_file(path: String, contents: Vec<u8>) -> Result<(), String> {
-    std::fs::write(&path, contents).map_err(|e| format!("cannot write {path}: {e}"))
+    use std::io::Write;
+    let target = std::path::Path::new(&path);
+    let parent = target.parent().ok_or("invalid export location")?;
+    let temp = parent.join(format!(".folio-export-{}.tmp", uuid::Uuid::new_v4()));
+    let result = (|| -> std::io::Result<()> {
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = options.open(&temp)?;
+        if let Ok(existing) = std::fs::metadata(target) {
+            file.set_permissions(existing.permissions())?;
+        }
+        file.write_all(&contents)?;
+        file.sync_all()?;
+        std::fs::rename(&temp, target)
+    })();
+    if result.is_err() { let _ = std::fs::remove_file(&temp); }
+    result.map_err(|e| format!("cannot write {path}: {e}"))
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn exports_are_private_and_preserve_existing_permissions() {
+        let folder = std::env::temp_dir().join(format!("folio-export-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&folder).unwrap();
+        let target = folder.join("backup.json");
+        save_file(target.to_string_lossy().into_owned(), b"first".to_vec()).unwrap();
+        assert_eq!(std::fs::metadata(&target).unwrap().permissions().mode() & 0o077, 0);
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o640)).unwrap();
+        save_file(target.to_string_lossy().into_owned(), b"second".to_vec()).unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"second");
+        assert_eq!(std::fs::metadata(&target).unwrap().permissions().mode() & 0o777, 0o640);
+        std::fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn failed_export_keeps_existing_target_and_cleans_temporary_file() {
+        let folder = std::env::temp_dir().join(format!("folio-export-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&folder).unwrap();
+        let target = folder.join("directory");
+        std::fs::create_dir(&target).unwrap();
+        assert!(save_file(target.to_string_lossy().into_owned(), b"fixture".to_vec()).is_err());
+        assert!(target.is_dir());
+        assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 1);
+        std::fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn only_google_authorization_can_open_the_system_browser() {
+        assert!(open_google_auth("https://example.com/".into()).is_err());
+        assert!(open_google_auth("file:///tmp/fixture".into()).is_err());
+    }
+}
+
+#[tauri::command]
+fn open_google_auth(url: String) -> Result<(), String> {
+    if !url.starts_with("https://accounts.google.com/o/oauth2/v2/auth?") {
+        return Err("only Google authorization URLs are allowed".into());
+    }
+    #[cfg(target_os = "linux")]
+    let mut command = std::process::Command::new("xdg-open");
+    #[cfg(target_os = "macos")]
+    let mut command = std::process::Command::new("open");
+    #[cfg(target_os = "windows")]
+    let mut command = { let mut c = std::process::Command::new("rundll32.exe"); c.arg("url.dll,FileProtocolHandler"); c };
+    command.arg(url).spawn().map(|_| ()).map_err(|e| format!("cannot open system browser: {e}"))
 }
 
 pub fn run() {
@@ -54,7 +127,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![core_connection, save_file])
+        .invoke_handler(tauri::generate_handler![core_connection, save_file, open_google_auth])
         .build(tauri::generate_context!())
         .expect("error while building Folio");
 

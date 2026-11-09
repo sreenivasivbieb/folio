@@ -25,6 +25,7 @@ class SourceKind(StrEnum):
     SUBTITLE = "subtitle"
     AUDIO = "audio"
     VIDEO = "video"
+    OTHER = "other"
 
 
 class SourceStatus(StrEnum):
@@ -35,6 +36,7 @@ class SourceStatus(StrEnum):
     MISSING = "missing"
     FORGOTTEN = "forgotten"  # the user asked to forget it: never re-indexed
     REMOVED = "removed"  # its folder was removed from Folio: knowledge kept, index dropped
+    METADATA = "metadata"  # searchable file information; no parser for its contents
 
 
 class EntityStatus(StrEnum):
@@ -89,6 +91,8 @@ class Root(BaseModel):
     kind: Literal["file", "folder"]
     watch: bool
     created_at: str
+    include_hidden: bool = False
+    exclude: list[str] = Field(default_factory=list)
 
 
 class Source(BaseModel):

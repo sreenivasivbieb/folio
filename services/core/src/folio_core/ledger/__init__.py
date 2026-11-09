@@ -1,8 +1,8 @@
 """The event ledger: append-only record of every create, edit, merge and reject.
 
-Every mutation of durable knowledge (MongoDB) goes through :class:`Ledger`. A *group* is one
+Every mutation of durable local knowledge goes through :class:`Ledger`. A *group* is one
 user-visible action ("merge Acme and ACME Corp"); each document it touches is an *event* with
-before/after snapshots, written in the same MongoDB transaction. That one structure gives us:
+before/after snapshots, written in the same local transaction. That one structure gives us:
 
 * **undo / redo** — revert a group by restoring its snapshots (recorded as a new group),
 * **audit / provenance** (FR-10) — the full history of any claim or entity,

@@ -83,7 +83,7 @@ class LLMExtractor:
         feedback = "Your previous answer had problems:\n- " + "\n- ".join(problems[:10])
         raw = self.llm.complete_json(system, f"{user}\n\n{feedback}\nReturn corrected JSON.", schema)
         out, problems = self._check(raw, ctx, text)
-        if out is None:
+        if out is None or (problems and not out.claims):
             raise ExtractionFailed("; ".join(problems[:5]), raw)
         return out  # partial: keep the valid claims, drop the invalid ones
 
