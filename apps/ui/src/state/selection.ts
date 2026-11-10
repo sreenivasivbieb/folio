@@ -12,7 +12,7 @@ export type Selection =
   | { kind: "claim"; ids: string[] }
   | { kind: "source"; id: string };
 
-export type ViewName = "drop" | "projects" | "graph";
+export type ViewName = "drop" | "projects" | "graph" | "swimlane" | "timeline";
 export type LeftTab = "sources" | "activity" | "trash";
 export type SettingsTab = "ai" | "voice" | "privacy" | "hints" | "data" | "drive" | "appearance";
 

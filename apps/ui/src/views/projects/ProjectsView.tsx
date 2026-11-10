@@ -68,6 +68,7 @@ function ProjectDetail({ drop }: { drop: Drop }) {
       </div>
       <div className="row wrap" style={{ gap: 8, marginBottom: 16 }}>
         <button type="button" className="btn" onClick={() => { selectEntity(drop.project!.id); ui.set({ view: "graph" }); }}><Icon name="graph" /> Show in graph</button>
+        <button type="button" className="btn" onClick={() => { selectEntity(drop.project!.id); ui.set({ view: "timeline" }); }}><Icon name="clock" /> Timeline</button>
         <button type="button" className="btn" onClick={() => ui.set({ view: "drop", activeDrop: drop.id })}><Icon name="pencil" /> Re-label</button>
         <button type="button" className="btn" onClick={() => setDisk(true)} disabled={drop.mode !== "copy"}
           title={drop.mode === "copy" ? "Move the original files into these folders" : "Files were moved into Folio — nothing to tidy on disk"}>

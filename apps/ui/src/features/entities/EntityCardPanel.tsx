@@ -69,6 +69,9 @@ export function EntityCardPanel({ entityId }: { entityId: string }) {
           <button type="button" className="stat btn ghost" style={{ height: "auto", flexDirection: "column", alignItems: "flex-start" }} onClick={() => ui.set({ focusEntity: e.id, view: "graph" })}>
             <Icon name="graph" /><span>show in graph</span>
           </button>
+          <button type="button" className="stat btn ghost" style={{ height: "auto", flexDirection: "column", alignItems: "flex-start" }} onClick={() => ui.set({ focusEntity: e.id, view: "timeline" })}>
+            <Icon name="clock" /><span>timeline</span>
+          </button>
         </div>
       </div>
 

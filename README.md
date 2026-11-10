@@ -78,6 +78,7 @@ the organization. Ctrl+Z undoes it, and the drop goes back to waiting for a labe
 Every organized drop becomes a project. A project shows your original label (as you
 said it), the summary, the people and tags, and the files grouped by folder.
 
+**Show in graph** and **Timeline** open the project in those views.
 **Preview &amp; organize on disk** (available for *Copy* drops of a single folder) shows
 exactly how the original files would be rearranged into those folders. Nothing moves
 until you confirm, and the move can be undone.
@@ -99,7 +100,26 @@ passages that support it.
 
 ![The knowledge graph with the Pune Solar project selected and its facts and evidence on the right](docs/screenshots/graph.png)
 
-### 6. Search everything
+### 6. Swimlane and Timeline
+
+Dated facts, such as when a project started, a meeting date or a deadline, appear on two
+time views:
+
+- **Swimlane** (`4`): one lane per entity (or per type), with every dated fact placed
+  along a shared time axis. Drag a chip sideways to change its date, or onto another
+  lane to move the fact to that entity. Both are ordinary edits, so Ctrl+Z undoes them.
+  Verified facts have a green border; proposed ones are dashed.
+- **Timeline** (`5`): everything dated about one project, person or topic, month by
+  month, with links to its sources. Open it from a project's **Timeline** button, from
+  the **timeline** button on any entity card, or select something and press `5`.
+
+Dates in your labels (e.g. *"…started 2026-03-02"*) land here automatically.
+
+![Swimlane: one lane per entity with dated facts along a time axis](docs/screenshots/swimlane.png)
+
+![Timeline for the Pune Solar project, with its dated fact and sources](docs/screenshots/timeline.png)
+
+### 7. Search everything
 
 Press `/` or Ctrl+K and type. Results come in this order:
 
@@ -112,14 +132,14 @@ Search combines keyword matching (SQLite FTS5) with vector similarity.
 
 ![Searching "inverter quotes" finds the exact line in a meeting note](docs/screenshots/search.png)
 
-### 7. See where everything came from
+### 8. See where everything came from
 
 Open a result, or any piece of evidence, and the **evidence viewer** shows the quoted
 span in its file: the line, page, image region or moment in a recording.
 
 ![The evidence viewer showing the quoted line from the vendor review note](docs/screenshots/evidence.png)
 
-### 8. Library, activity and trash
+### 9. Library, activity and trash
 
 The left sidebar holds:
 
@@ -137,14 +157,14 @@ The bar at the bottom of the window lets you describe whatever is selected, by v
 text, for example *"Priya leads it"*, *"it is a Course"* or *"merge these two"*. You
 always see a preview first, and one Ctrl+Z undoes it.
 
-### 9. Light or dark
+### 10. Light or dark
 
 Folio has a light theme (the default), a dark theme, or it can follow your system
 (**Settings → Appearance**).
 
 ![The graph in dark mode](docs/screenshots/dark-mode.png)
 
-### 10. Settings
+### 11. Settings
 
 ![Settings → AI model: choose a provider, base URL, API key and model](docs/screenshots/settings-ai.png)
 
@@ -162,7 +182,7 @@ Folio has a light theme (the default), a dark theme, or it can follow your syste
 
 | Keys | Action |
 | --- | --- |
-| `1` `2` `3` | Switch to Drop &amp; Label, Projects, Graph |
+| `1` `2` `3` `4` `5` | Switch to Drop &amp; Label, Projects, Graph, Swimlane, Timeline |
 | `/` or Ctrl+K | Search |
 | Ctrl+Space (hold) | Record a voice label on the Drop screen |
 | Ctrl+Enter | Organize the drop with the typed label |
@@ -252,8 +272,8 @@ See [installation details](docs/INSTALL.md) for storage, removal and migration n
 4. Describe the files. For example: *"Final architecture docs, datasets and meeting
    notes with Rahul for the Pune Solar project"*. To speak instead, hold
    **Hold to speak** or Ctrl+Space.
-5. Click **Organize with AI**. Open the result in **Projects** or view it in the
-   **Graph**, then try searching for something inside one of the files.
+5. Click **Organize with AI**. Open the result in **Projects**, the **Graph** or the
+   **Timeline**, then try searching for something inside one of the files.
 
 You can label a drop while it is still importing; it is organized as soon as the
 files are in.

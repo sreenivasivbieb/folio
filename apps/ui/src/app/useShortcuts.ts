@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { useKnowledgeActions } from "@/api/queries";
 import { ui, type ViewName } from "@/state/selection";
 
-const VIEWS: ViewName[] = ["drop", "projects", "graph"];
+const VIEWS: ViewName[] = ["drop", "projects", "graph", "swimlane", "timeline"];
 
 export function useShortcuts(): void {
   const { undo, redo } = useKnowledgeActions();
@@ -26,7 +26,7 @@ export function useShortcuts(): void {
       } else if (mod && e.key.toLowerCase() === "y" && !typing) {
         e.preventDefault();
         redo.mutate(undefined);
-      } else if (!mod && !typing && ["1", "2", "3"].includes(e.key)) {
+      } else if (!mod && !typing && ["1", "2", "3", "4", "5"].includes(e.key)) {
         ui.set({ view: VIEWS[Number(e.key) - 1] });
       } else if (e.key === "Escape" && !typing) {
         ui.set({ evidence: null, openSourceId: null });

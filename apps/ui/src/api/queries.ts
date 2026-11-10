@@ -114,6 +114,25 @@ export function useGraph(entityId: string | null, depth: number, includeMentions
   });
 }
 
+export function useTimeline(entityId: string | null) {
+  const { client } = useApi();
+  return useQuery({
+    queryKey: ["timeline", entityId],
+    enabled: !!entityId,
+    queryFn: async () =>
+      unwrap(await client.GET("/api/views/timeline/{entity_id}", { params: { path: { entity_id: entityId! } } })),
+  });
+}
+
+export function useSwimlane(groupBy: "entity" | "type", types?: string[]) {
+  const { client } = useApi();
+  return useQuery({
+    queryKey: ["swimlane", groupBy, types],
+    queryFn: async () =>
+      unwrap(await client.GET("/api/views/swimlane", { params: { query: { group_by: groupBy, type: types } } })),
+  });
+}
+
 export function useLabel(id: string | null | undefined) {
   const { client } = useApi();
   return useQuery({

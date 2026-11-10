@@ -1,7 +1,7 @@
 /**
  * App shell:
  *   sidebar   — Library / Activity / Trash, plus AI-model and voice status
- *   main      — Drop & Label (intake), Projects (what the AI organized), Graph
+ *   main      — Drop & Label (intake), Projects (what the AI organized), Graph, Swimlane, Timeline
  *   inspector — evidence viewer, file viewer, or the selected entity's card
  *   composer  — push-to-talk and typed labels
  */
@@ -22,6 +22,8 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { GraphView } from "@/views/graph/GraphView";
 import { DropView } from "@/views/drop/DropView";
 import { ProjectsView } from "@/views/projects/ProjectsView";
+import { SwimlaneView } from "@/views/swimlane/SwimlaneView";
+import { TimelineView } from "@/views/timeline/TimelineView";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { useShortcuts } from "./useShortcuts";
@@ -30,6 +32,8 @@ const VIEWS: { id: ViewName; label: string; icon: IconName }[] = [
   { id: "drop", label: "Drop & Label", icon: "download" },
   { id: "projects", label: "Projects", icon: "layers" },
   { id: "graph", label: "Graph", icon: "graph" },
+  { id: "swimlane", label: "Swimlane", icon: "lanes" },
+  { id: "timeline", label: "Timeline", icon: "clock" },
 ];
 
 /** Tells the user what to do next instead of showing an empty canvas. */
@@ -96,6 +100,8 @@ function MainArea() {
             </div>
           )
           : <><Onboarding /><GraphView /></>)}
+        {view === "swimlane" && <SwimlaneView />}
+        {view === "timeline" && <TimelineView />}
       </ErrorBoundary>
     </main>
   );
