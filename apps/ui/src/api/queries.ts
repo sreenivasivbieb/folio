@@ -75,14 +75,6 @@ export interface TableFilter {
   include_mentions?: boolean;
 }
 
-export function useTable(filter: TableFilter, offset = 0, order = "recent") {
-  const { client } = useApi();
-  return useQuery({
-    queryKey: ["claims", "table", filter, offset, order],
-    queryFn: async () => unwrap(await client.GET("/api/views/table", { params: { query: { ...filter, limit: 100, offset, order } } })),
-  });
-}
-
 export function useClaim(id: string | null | undefined) {
   const { client } = useApi();
   return useQuery({
@@ -122,25 +114,6 @@ export function useGraph(entityId: string | null, depth: number, includeMentions
   });
 }
 
-export function useTimeline(entityId: string | null) {
-  const { client } = useApi();
-  return useQuery({
-    queryKey: ["timeline", entityId],
-    enabled: !!entityId,
-    queryFn: async () =>
-      unwrap(await client.GET("/api/views/timeline/{entity_id}", { params: { path: { entity_id: entityId! } } })),
-  });
-}
-
-export function useSwimlane(groupBy: "entity" | "type", types?: string[]) {
-  const { client } = useApi();
-  return useQuery({
-    queryKey: ["swimlane", groupBy, types],
-    queryFn: async () =>
-      unwrap(await client.GET("/api/views/swimlane", { params: { query: { group_by: groupBy, type: types } } })),
-  });
-}
-
 export function useLabel(id: string | null | undefined) {
   const { client } = useApi();
   return useQuery({
@@ -148,11 +121,6 @@ export function useLabel(id: string | null | undefined) {
     enabled: !!id,
     queryFn: async () => unwrap(await client.GET("/api/labels/{label_id}", { params: { path: { label_id: id! } } })),
   });
-}
-
-export function useReview() {
-  const { client } = useApi();
-  return useQuery({ queryKey: ["review"], queryFn: async () => unwrap(await client.GET("/api/review")) });
 }
 
 export function useJobs() {

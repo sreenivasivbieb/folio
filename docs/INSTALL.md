@@ -19,13 +19,13 @@ Startup/runtime logs are in `~/.local/share/folio/logs/core.log`. Your own API k
 optional Google OAuth credentials are in `secrets.json` with private file permissions.
 Set `FOLIO_DATA_DIR` before launching to choose another local storage folder.
 
-Choose **Scan my computer** to select Home, mounted drives, the readable filesystem, or
-additional paths. File inventory and supported content indexing run in background jobs;
-progress and errors appear in Activity. Hidden folders, exclusions and watching are
-optional. Unsupported content formats show **Metadata only**. Symlinks, unreadable files,
-virtual system paths and Folio's data folder are skipped. Originals are never modified,
-moved or uploaded by scanning. No scan starts just by installing Folio; previously
-selected folders are rescanned on later app launches.
+Folio never scans your computer. On the **Drop & Label** screen, drop files or a project
+folder (or choose them), pick **Move** (files then live only in Folio's `vault/` folder)
+or **Copy**, and describe them by voice or text; the AI organizes them into a project.
+Junk inside dropped folders (hidden files, `node_modules`, `.git`, build output,
+lockfiles, binaries, disk images) is skipped automatically. Indexing runs in background
+jobs; progress and errors appear in Activity. Unsupported formats show **Metadata only**.
+Nothing is imported just by installing Folio.
 
 ## Your AI and Google Drive connections
 

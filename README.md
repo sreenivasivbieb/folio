@@ -2,33 +2,48 @@
 
 [![CI](https://github.com/sreenivasivbieb/folio/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/sreenivasivbieb/folio/actions/workflows/ci.yml)
 
-**Turn files on your computer into searchable, connected knowledge.**
+**Drop your files, say what they are, and find everything later.**
 
-Folio is a desktop file organizer for **Windows and Linux** (including Omarchy/Arch). Scan folders and mounted drives,
-search document passages, review extracted people and facts, and explore their
-connections in graph, table, timeline and swimlane views. Every extracted fact keeps
-its supporting source evidence.
+Folio is a desktop workspace for **Windows and Linux** (including Omarchy/Arch) built
+around one loop:
 
-Your originals stay in place. Folio stores its knowledge and search index in private
-local files on your machine. Choose offline processing, a local AI model, or a cloud
-AI provider with your own API key. Optional Google Drive backup uses your own Google
-account and OAuth credentials.
+**Drop → Label (voice or text) → AI organizes → Graph & Search**
 
-[Install](#install) · [First scan](#your-first-scan) ·
+1. **Drop** files or a whole project folder onto the window. Folio never scans your
+   computer, and it silently skips junk such as `node_modules`, `.git`, build output,
+   lockfiles and binaries.
+2. **Label** the drop in your own words — type it, or hold to speak in English, Hindi
+   or Hinglish.
+3. **The AI organizes** it from your label: a project, a short summary, folders for the
+   files, tags, and the people, organisations and dates you mentioned. Without an AI
+   model, offline rules do the same from your label and the folder layout.
+4. **Explore and search** a clean graph of projects, folders, files, people and topics,
+   and search by what you said, by project, by name, or by the text inside any file.
+
+Your files and knowledge stay in private local files on your machine. Choose offline
+processing, a local AI model, or a cloud AI provider with your own API key. Optional
+Google Drive backup uses your own Google account and OAuth credentials.
+
+[Install](#install) · [First drop](#your-first-drop) ·
 [Storage](#your-data-and-privacy) · [AI](#choose-your-ai) ·
 [Google Drive](#optional-google-drive-backup) · [Development](#development)
 
 ## What you can do
 
-- **Scan your computer:** select Home, mounted drives, the readable filesystem, or
-  custom folders. Background jobs report progress and individual file errors.
-- **Search with evidence:** find indexed passages and trace them to source files,
-  document pages, text lines or media timestamps.
-- **Review extracted knowledge:** edit, verify or reject proposed facts, with history
-  and undo/redo. Explore connections in graph, table, timeline and swimlane views.
-- **Add voice labels:** hold a key and speak — in English, Hindi or Hinglish. Speech is
-  recognised and translated to English on your computer by an explicitly downloaded
-  Whisper model; you review (and can correct) the result before anything is saved.
+- **Drop & Label:** drop files or a project folder (or pick them), see how many files
+  will be added and how much junk is skipped, choose **Move** (files then live only in
+  Folio — no duplicate disk space) or **Copy**, then describe them by voice or text.
+- **Organize with AI:** one click turns your label into a project with a summary,
+  folders, tags, people and organisations. Re-label any time; Ctrl+Z undoes it.
+- **Projects:** every organized drop as a project — your original label, the AI
+  summary, people and tags, and the files grouped by folder. Optionally **Preview &
+  organize on disk** to move the original files into those folders (Copy drops only;
+  nothing moves until you confirm, and it can be undone).
+- **Graph:** projects, folders, files, people and topics, linked. Focus on a project,
+  person or tag, and highlight anything by name.
+- **Search everything** (`/` or Ctrl+K): your labels and project summaries first, then
+  project, tag and file names (typos and partial words are fine), then exact passages
+  with page numbers, lines or audio/video timestamps.
 - **Keep portable backups:** export JSON, GraphML, Markdown or CSV, and restore Folio
   JSON backups into an empty project.
 
@@ -109,22 +124,26 @@ tar --zstd -xf folio-omarchy-x86_64.tar.zst
 The portable app needs the same runtime libraries as the Arch package. See
 [installation details](docs/INSTALL.md) for storage, removal and migration notes.
 
-## Your first scan
+## Your first drop
 
-1. Open Folio and choose **Scan my computer**.
-2. Select Home, a mounted drive, the readable filesystem, or a custom path.
-3. Choose hidden-file, exclusion and folder-watching settings, then start the scan.
-4. Open **Activity** to follow indexing progress and inspect failed jobs.
-5. Search your files and review extracted claims before marking them verified.
+1. Open Folio. The **Drop & Label** screen is the home screen.
+2. Drop files or a project folder onto the window, or use **Choose files** /
+   **Choose a folder**. Folio shows how many files it will add and how many junk files
+   it skips.
+3. Choose **Move** or **Copy**, then **Add**.
+4. Say or type what the files are — for example *"Final architecture docs, datasets and
+   meeting notes with Rahul for the Pune Solar project"*. **Hold to speak** fills the
+   box with your words so you can check them first.
+5. Click **Organize with AI**. The result shows the project, summary, folders, people
+   and tags; open it in **Projects** or view it in the **Graph**.
 
-Scanning reads originals in place. It does not copy, move or modify them. Installation
-starts no personal-file scan; selected folders are rescanned on later app launches.
-
-Folio inventories readable regular files in your selected locations. Supported formats
-get content indexing; other formats appear as **Metadata only**. Symlinks, unreadable
-paths, virtual system directories and Folio's own data folder are skipped. Hidden
-folders and common cache, dependency and credential directories are excluded by default.
-You can adjust exclusions in the scan dialog.
+Skipped automatically when you drop a folder: hidden files and folders, `.git`, `.svn`,
+`.hg`, `node_modules`, `bower_components`, virtual environments (`venv`, `.venv`,
+`env`), caches (`__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.cache`),
+build output (`target`, `dist`, `build`, `out`, `.next`, `.nuxt`), editor folders,
+lockfiles, binaries (`.exe`, `.dll`, `.so`, `.dylib`, `.o`, `.pyc`, `.class`, `.jar`,
+`.wasm`) and disk images (`.iso`, `.img`, `.vmdk`). Supported formats get content
+indexing; other formats are kept as **Metadata only**.
 
 ### Supported content
 
@@ -135,12 +154,13 @@ You can adjust exclusions in the scan dialog.
 | Word | `.docx` | Document text extraction |
 | Subtitles | `.srt`, `.vtt` | Text with timestamps |
 | Images | `.png`, `.jpg`, `.jpeg`, `.webp`, `.tif`, `.tiff`, `.bmp`, `.gif` | Optional OCR; basic image details when text is unavailable |
-| Audio | `.mp3`, `.wav`, `.m4a`, `.ogg`, `.oga`, `.opus`, `.flac`, `.aac`, `.wma` | Local transcription with timestamps |
-| Video | `.mp4`, `.mkv`, `.mov`, `.webm`, `.avi`, `.m4v`, `.wmv` | Local transcription of the audio track |
+| Audio | `.mp3`, `.wav`, `.m4a`, `.ogg`, `.oga`, `.opus`, `.flac`, `.aac`, `.wma` | Transcription with timestamps (offline model, or your provider's Whisper) |
+| Video | `.mp4`, `.mkv`, `.mov`, `.webm`, `.avi`, `.m4v`, `.wmv` | Transcription of the audio track (videos without audio are kept as-is) |
 
 OCR requires Tesseract with English language data (optional on every platform).
-Audio/video indexing needs only the speech model: download it once in
-**Settings → Voice** (~480 MB). Decoding is built in — no ffmpeg needed.
+Audio/video transcription uses your connected Groq/OpenAI account, or the offline speech
+model you download once in **Settings → Voice** (~480 MB). Decoding is built in — no
+ffmpeg needed.
 
 ## Your data and privacy
 
@@ -152,7 +172,8 @@ when `XDG_DATA_HOME` is set:
 
 | Local file or folder | Contents |
 | --- | --- |
-| `knowledge.sqlite3` | Sources, entities, claims, settings and undo history |
+| `vault/` | Files you dropped into Folio (moved or copied), and Folio's trash |
+| `knowledge.sqlite3` | Drops, labels, projects, entities, links, settings and undo history |
 | `index.db` | Rebuildable parsed content, search index, vectors, jobs and model cache |
 | `secrets.json` | Your AI API keys and optional Google OAuth credentials/tokens |
 | `labels/` | Locally recorded voice-label audio |
@@ -166,19 +187,20 @@ You control the connections that can send data elsewhere:
 
 | Choice | Data handling |
 | --- | --- |
-| Default offline processing | Rule-based extraction and search run on this device |
+| Default offline processing | Rule-based organizing and search run on this device |
 | Local AI endpoint | Document text goes to the local model server you configure |
-| Hosted AI provider | Document text is sent to your chosen provider for processing using your key |
+| Hosted AI provider | Your labels, file names and short text snippets are sent to your chosen provider using your key; with voice through the provider, label audio is too |
 | Google Drive **Back up now** | A knowledge backup is uploaded to your Google account |
 
 Credentials are excluded from knowledge exports and Drive backups. Backups can contain
 document excerpts, source paths and history, so choose their destination accordingly.
-Removing the app retains your originals and local app data.
+Removing the app retains your local app data (including files you moved into Folio's
+vault) and any originals you copied from.
 
 ## Choose your AI
 
-Folio works without an AI account using offline pattern matching. This baseline finds
-simple patterns; richer extraction needs a model you connect yourself.
+Folio works without an AI account: offline rules organize each drop from your label
+and the folder layout. A connected model understands any phrasing and organizes better.
 
 In **Settings → AI model**:
 
@@ -186,13 +208,19 @@ In **Settings → AI model**:
    OpenAI-compatible endpoint. Start your local model server separately.
 2. Alternatively, choose a hosted preset such as OpenRouter, OpenAI, Qwen or Groq,
    or enter a custom compatible URL, and supply your own API key.
-3. Use **Load models**, select an available model, and **Save**.
-4. Use **Test** to check the connection, then **Extract all files now** to process
-   existing files with the selected model.
+3. Use **Load models**, select an available model, and **Save**. Use **Test** to check
+   the connection.
+
+With Groq or OpenAI connected, voice labels also work right away through the provider's
+Whisper; download the offline speech model in **Settings → Voice** to keep audio on
+your computer. Free tiers rate-limit requests: Folio waits and retries instead of failing.
 
 Saving a hosted endpoint enables cloud processing for the project. The top bar shows
 **Local AI** or **Cloud AI**. Disable cloud processing in **Settings → Privacy**.
 Working knowledge remains in your local Folio files with either choice.
+
+Deep fact extraction (every person and fact in every passage, for review) is off by
+default; run it on demand with **Settings → Data → Re-run extraction**.
 
 ## Optional Google Drive backup
 
@@ -216,7 +244,7 @@ are excluded.
 
 Use the same OAuth client on another device to access its backups. **Restore locally**
 requires an empty local project; source documents must be available separately to
-reopen or rescan them. **Disconnect locally** removes this device's Drive credentials.
+reopen them. **Disconnect locally** removes this device's Drive credentials.
 Google account permissions can also be revoked in your Google account.
 
 For a local backup, use **Settings → Data** to export JSON and restore it into an empty
@@ -282,19 +310,22 @@ it measures the rule extractor on those fixtures, rather than live AI model qual
 | Symptom | Where to look |
 | --- | --- |
 | Core service fails to start | Inspect `logs/core.log` in your data folder; check whether another Folio instance is using that folder |
-| Some files are absent from a scan | Check location permissions, hidden-file settings, exclusions and Activity errors |
+| Fewer files were added than you dropped | Junk (hidden, `node_modules`, build output, lockfiles, binaries) is skipped on purpose — the drop card shows the count; duplicates already in Folio are reused |
+| A drop stays "Organizing…" | A rate-limited AI provider is being waited on; without a reply Folio falls back to offline rules. See Activity |
+| "Organize on disk" is disabled | It needs a single folder dropped with **Copy**; moved files live in Folio — use Export first |
 | A file says **Metadata only** | Its format has no content parser; its path and metadata are still inventoried |
 | Images or scanned PDFs have no extracted text | Check Tesseract and its English language data |
-| Audio/video indexing fails | Check the speech-model download (Settings → Voice) and the failed job in Activity |
+| Audio/video has no transcript | Connect Groq/OpenAI or download the speech model (Settings → Voice); videos without an audio track are kept without one |
 | Voice: nothing happens on Wayland | Apps can't grab global keys there: bind a desktop shortcut to `folio-core voice toggle` (Settings → Voice) |
 | Voice: a name is misheard | Click **Edit** in the label preview, fix the text, **Re-check** |
 | AI connection fails | Check the local server or hosted provider URL, model and your API key; use **Test** |
 | Drive restore is unavailable | Restore into an empty project using the OAuth client that created the backup |
 
 The Omarchy x86_64 package has been built and checked with generated sample files,
-including scanning and persistence after restart. Live Google sign-in, real-provider
-AI behavior, whole-computer scan performance and native Wayland interaction still need
-validation on target installations. CI runs the core test suite on Linux and Windows and
+and the drop → label → organize → graph flow has been exercised end to end in a browser
+against a real hosted model (Groq). Live Google sign-in, native file drag-and-drop in the
+desktop window, and native Wayland interaction still need validation on target
+installations. CI runs the core test suite on Linux and Windows and
 builds the desktop shell on Linux, macOS and Windows; the release workflow builds and
 smoke-tests the bundled core for the Windows and Linux installers. Installing and using
 them on real Windows/Linux machines (microphone, WebView2) still needs a manual check.

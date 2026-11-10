@@ -21,16 +21,21 @@ API keys and optional Google OAuth tokens stay in the user's `secrets.json` (060
 separate from knowledge exports. The app data folder is private (0700) on Linux. Rotating
 runtime/startup logs are in its `logs` subfolder.
 
-## Scanning and processing
+## Drops and processing
 
-The file picker accepts any readable path. Scan my computer discovers Home and mounted
-drives and offers the readable filesystem plus custom paths. Root selection, hidden-file
-policy and exclusions are stored locally. Scans are resumable jobs, stream directory
-entries, skip symlinks and virtual/system data, and continue after individual permission
-errors. Unsupported formats get source metadata without reading their contents.
+Folio only imports what the user drops or picks (`POST /drops`); it never scans the
+computer. Dropped folders are walked with a fixed smart-ignore list (hidden entries,
+VCS/dependency/cache/build folders, lockfiles, binaries, disk images); the skipped count
+is reported. Files are moved or copied into the private `vault/` folder, which is the
+only root Folio indexes. Duplicate content already in the vault is reused.
 
-Supported files are hashed, parsed in a limited subprocess when appropriate, chunked,
-embedded and proposed for extraction. Originals are read in place. A duplicate change
+Supported files are hashed, parsed in a limited subprocess when appropriate, chunked
+and embedded for search. The label (`POST /drops/{id}/label`, typed or transcribed) is
+the primary input of the drop organizer (`organize/drops.py`): a model — or offline
+rules — returns a project, summary, virtual folders, tags, entities and links, written
+to the graph as Project → Folder → File plus project → tag/person/organisation. A
+per-file organizer adds a readable title and description. Deep per-passage fact
+extraction is opt-in (`Settings.auto_extract`, or Re-run extraction). A duplicate change
 received while a job runs schedules another pass rather than losing the update.
 
 Forget/remove and short index commits share the local knowledge writer guard. A parser
@@ -41,9 +46,10 @@ successfully processed chunks participate in stale-result pruning.
 ## Knowledge and views
 
 KnowledgeService owns entity and claim edits. Ledger groups record row snapshots and
-provide undo/redo and provenance. Model results remain proposals until reviewed. The graph,
-swimlane, timeline and table share the same underlying claims. Files and table rows use
-server pagination and sorting with loading/error/retry states.
+provide undo/redo and provenance. The UI has three views — Drop & Label, Projects and
+Graph — over the same claims. Organizing results are applied directly (and undoable);
+results of on-demand deep extraction stay proposals in the review API. Files use server
+pagination with loading/error/retry states.
 
 The core publishes transient SSE events. The UI refreshes caches when the stream reconnects
 and probes the authenticated backend with bounded requests. A desktop backend restart
@@ -74,9 +80,10 @@ sidecar and never fall back to the developer checkout. Runtime libraries are dec
 the package. No Docker, MongoDB or Python development environment is required by the app.
 
 Tests cover local persistence, rollback, crash recovery, extraction failure, forget races,
-scan exclusions, metadata inventory, pagination, credentials and connection health.
+smart-ignore filtering, drops and labels, AI and rule-based organizing, disk organization
+with undo, pagination, credentials and connection health.
 Provider fixtures are not live AI quality evidence. Google Drive's live OAuth and account
-permissions must still be checked with the user's own credentials. Whole-machine indexing
-performance and native Wayland behavior require testing on real target installations.
+permissions must still be checked with the user's own credentials. Native drag-and-drop
+and native Wayland behavior require testing on real target installations.
 
 Older ADRs describe previous storage designs; ADR-0011 supersedes the MongoDB requirement.
