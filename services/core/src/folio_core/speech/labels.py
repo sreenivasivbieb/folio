@@ -32,6 +32,9 @@ STATUS_TTL_S = 15.0
 BEAM_SIZE = 3  # short commands: near-greedy decoding keeps end-of-speech -> preview fast
 
 
+NOTHING_TO_APPLY = ("nothing to apply — select a file, person or project to describe it, "
+                    "or say a fact such as “Priya works at Acme”")
+
 class LabelService:
     def __init__(self, *, kdb: KnowledgeDB, index: IndexDB, ledger: Ledger, knowledge: KnowledgeService,
                  learning: CorrectionStore, transcriber: Transcriber, audio_dir: Path,
@@ -243,7 +246,7 @@ class LabelService:
         if parsed["questions"]:
             raise Conflict("answer the open questions first")
         if not parsed["ops"]:
-            raise InvalidInput("nothing to apply")
+            raise InvalidInput(NOTHING_TO_APPLY)
         source_id = None
         if label.target_kind == "source" and label.target_ids:
             source_id = label.target_ids[0]

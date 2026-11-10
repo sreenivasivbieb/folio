@@ -92,9 +92,47 @@ def matches(doc: dict[str, Any], query: dict[str, Any]) -> bool:
 
 
 def _expression(field: str) -> str | None:
-    if not re.fullmatch(r"[A-Za-z_][\w.]*", field) or field.split(".")[0] in {"aliases", "evidence"}:
+    if not re.fullmatch(r"[A-Za-z_][\w.]*", field) or field.split(".")[0] in ARRAY_FIELDS:
         return None
     return "id" if field == "_id" else f"json_extract(body, '$.{field}')"
+
+
+ARRAY_FIELDS = frozenset({"aliases", "evidence"})  # lists of objects inside a record
+
+
+def _array_where(field: str, condition: Any) -> tuple[str, list[Any]] | None:
+    """``evidence.source_id`` style filters ("any element matches") as SQL over json_each, so
+    forgetting a file or resolving a name no longer scans every record in Python."""
+    head, _, tail = field.partition(".")
+    if not re.fullmatch(r"[A-Za-z_]\w*", tail):
+        return None
+    element = f"json_extract(_e.value, '$.{tail}')"
+    source = f"json_each(documents.body, '$.{head}') AS _e"
+    if not isinstance(condition, dict):
+        condition = {"$eq": condition}
+    clauses, args = [], []
+    for op, value in condition.items():
+        if op == "$options":
+            continue
+        if value is None:
+            return None  # "missing" vs null differ between the two engines: use the exact one
+        if op in ("$in", "$nin"):
+            if not value:
+                clauses.append("1" if op == "$nin" else "0")
+                continue
+            test, arg = f"{element} IN (SELECT value FROM json_each(?))", json.dumps(value)
+        elif op == "$regex":
+            test = f"{element} REGEXP ?"
+            arg = ("(?i)" if "i" in condition.get("$options", "") else "") + value
+        elif op in {"$eq", "$ne", "$gt", "$gte", "$lt", "$lte"}:
+            symbol = {"$eq": "=", "$ne": "=", "$gt": ">", "$gte": ">=", "$lt": "<", "$lte": "<="}[op]
+            test, arg = f"{element} {symbol} ?", value
+        else:
+            return None
+        negate = op in ("$ne", "$nin")  # "no element equals"
+        clauses.append(f"{'NOT ' if negate else ''}EXISTS (SELECT 1 FROM {source} WHERE {test})")
+        args.append(arg)
+    return " AND ".join(clauses) or "1", args
 
 
 def _where(query: dict[str, Any]) -> tuple[str, list[Any]] | None:
@@ -106,6 +144,13 @@ def _where(query: dict[str, Any]) -> tuple[str, list[Any]] | None:
                 return None
             clauses.append("(" + (" OR " if field == "$or" else " AND ").join(q[0] for q in sub) + ")")
             args += [a for q in sub for a in q[1]]
+            continue
+        if field.split(".")[0] in ARRAY_FIELDS:
+            compiled = _array_where(field, condition)
+            if compiled is None:
+                return None
+            clauses.append(compiled[0])
+            args += compiled[1]
             continue
         expr = _expression(field)
         if expr is None:

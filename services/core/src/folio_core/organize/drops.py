@@ -123,19 +123,22 @@ class DropService:
         # Labelled while importing (re-read: the label may have arrived during this step):
         # organize now that the files are in.
         if (self.kdb["drops"].find_one({"_id": drop_id}) or {}).get("label"):
-            self.kdb["drops"].update_one({"_id": drop_id}, {"$set": {"status": "organizing"}})
+            # Queue first: a drop shown as "organizing" always has a job behind it.
             self.queue.enqueue("organize_drop", {"drop_id": drop_id}, dedupe_key=f"organize-drop:{drop_id}", priority=25)
+            self.kdb["drops"].update_one({"_id": drop_id}, {"$set": {"status": "organizing"}})
 
     def set_label(self, drop_id: str, label: str) -> dict[str, Any]:
         label = " ".join((label or "").split())
         if not label:
             raise InvalidInput("say or type what these files are")
         drop = self._drop(drop_id)
-        status = "organizing" if drop["status"] != "importing" else "importing"
-        self.kdb["drops"].update_one({"_id": drop_id}, {"$set": {"label": label, "status": status,
-                                                                 "error": None, "updated_at": utcnow()}})
-        if status != "importing":  # otherwise attach_import queues it when the files are in
+        # Label first (the job reads it), then the job, then the status: a drop shown as
+        # "organizing" always has a job behind it.
+        self.kdb["drops"].update_one({"_id": drop_id}, {"$set": {"label": label, "error": None,
+                                                                 "updated_at": utcnow()}})
+        if drop["status"] != "importing":  # otherwise attach_import queues it when the files are in
             self.queue.enqueue("organize_drop", {"drop_id": drop_id}, dedupe_key=f"organize-drop:{drop_id}", priority=25)
+            self.kdb["drops"].update_one({"_id": drop_id}, {"$set": {"status": "organizing"}})
         return self.get(drop_id)
 
     # --- read ---------------------------------------------------------------------------------
@@ -159,8 +162,12 @@ class DropService:
                           "folder": folder_of.get(f["rel_path"])})
         project = repo.get_entity(self.kdb, d["project_id"]) if d.get("project_id") else None
         status = d["status"]
-        if status == "organized" and (project is None or project.status.value in ("merged", "rejected")):
-            status, project = "imported", None  # organizing was undone (Ctrl+Z): label it again
+        if project is not None and project.status.value in ("merged", "rejected"):
+            project = None
+        if status == "organizing" and not self._organize_pending(drop_id):
+            status = "organized"  # nothing is organizing it any more (e.g. a crash): settle it
+        if status == "organized" and project is None:
+            status = "imported"  # organizing was undone (Ctrl+Z): label it again
         return {
             "id": d["_id"], "status": status, "mode": d["mode"], "paths": d["paths"],
             "file_count": d.get("file_count", 0), "skipped": d.get("skipped", 0), "label": d.get("label"),
@@ -169,6 +176,12 @@ class DropService:
             "plan": {k: v for k, v in (d.get("plan") or {}).items() if k != "assignments"} or None,
             "files": files, "disk": d.get("disk"), "import_stats": d.get("import_stats"),
         }
+
+    def _organize_pending(self, drop_id: str) -> bool:
+        row = self.queue.db.reader().execute(
+            "SELECT 1 FROM jobs WHERE dedupe_key = ? AND status IN ('queued', 'running') LIMIT 1",
+            (f"organize-drop:{drop_id}",)).fetchone()
+        return row is not None
 
     def list(self, limit: int = 50) -> list[dict[str, Any]]:
         return [self.get(d["_id"]) for d in self.kdb["drops"].find().sort("created_at", -1).limit(limit)]
@@ -212,12 +225,10 @@ class DropService:
             if not plan.tags:
                 plan.tags = rules.tags
         plan = normalize_plan(plan, [f["rel_path"] for f in files])
-        created = self._apply(drop, plan, engine)
-        assignments = {rel: g.folder for g in plan.virtual_folders for rel in g.files}
-        self.kdb["drops"].update_one({"_id": drop_id}, {"$set": {
-            "status": "organized", "engine": engine, "project_id": created["project"], "created": created,
-            "plan": {**plan.model_dump(), "assignments": assignments}, "organized_at": utcnow(),
-            "error": None, "updated_at": utcnow()}})
+        self._apply(drop, plan, engine)
+        # The status is not part of the undoable record (get() derives it), so undo/redo chains
+        # are never blocked by a later re-label changing it.
+        self.kdb["drops"].update_one({"_id": drop_id}, {"$set": {"status": "organized", "error": None}})
         return f"organized as “{plan.project_name}” ({len(plan.virtual_folders)} folders, {engine})"
 
     def _prompt(self, drop: dict[str, Any]) -> str:
@@ -340,6 +351,12 @@ class DropService:
                 a, b = names.get(normalize_name(edge.source)), names.get(normalize_name(edge.target))
                 if a and b and a != b:
                     claim(subject_id=a, predicate=canonical_predicate(edge.relation), object_id=b, extractor=ai)
+            # What this organizing produced is part of the same undoable action: Ctrl+Z puts
+            # the drop's plan back together with the graph.
+            assignments = {rel: g.folder for g in plan.virtual_folders for rel in g.files}
+            tx.update("drops", drop["_id"], {
+                "engine": engine, "project_id": created["project"], "created": created,
+                "plan": {**plan.model_dump(), "assignments": assignments}, "organized_at": utcnow()})
         return created
 
     def _document_entity(self, tx: Any, source_id: str) -> str:

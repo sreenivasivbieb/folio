@@ -53,7 +53,8 @@ class Vault:
             old = next((d for d in self.kdb["roots"].find({"path": {"$regex": r"[\\/]vault$"}})
                         if ".trash" in (d.get("exclude") or [])), None)
             if old is not None:
-                self.kdb["roots"].update_one({"_id": old["_id"]}, {"$set": {"path": here}})
+                with self.ingestion.ledger.group("system", "root.rehome", here) as tx:
+                    tx.update("roots", old["_id"], {"path": here})
                 doc = self.kdb["roots"].find_one({"_id": old["_id"]})
         if doc is not None:
             return repo.root_from_doc(doc)

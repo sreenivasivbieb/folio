@@ -12,10 +12,13 @@ use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const READY_PREFIX: &str = "FOLIO_READY ";
 const MAX_RESTARTS: u32 = 3;
+/// A core that stayed up this long was healthy: its later exit starts a fresh restart budget,
+/// so a few crashes spread over a long day never stop Folio for good.
+const HEALTHY_UPTIME: Duration = Duration::from_secs(60);
 
 fn terminate_tree(child: &mut Child) {
     // PyInstaller has a bootloader and a Python worker. Stop their entire owned group.
@@ -90,6 +93,7 @@ impl Sidecar {
             loop {
                 match me.spawn_once(&token) {
                     Ok(()) => {
+                        let started = Instant::now();
                         let (lock, _) = &*me.inner;
                         // Poll so that stop() can kill the child from another thread meanwhile.
                         let status = loop {
@@ -109,6 +113,9 @@ impl Sidecar {
                             return;
                         }
                         log::warn!("core exited: {status:?}");
+                        if started.elapsed() >= HEALTHY_UPTIME {
+                            restarts = 0;
+                        }
                     }
                     Err(e) => {
                         let (lock, cvar) = &*me.inner;
@@ -157,7 +164,10 @@ impl Sidecar {
             cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
         }
         let mut child = cmd.spawn().map_err(|e| format!("cannot launch core: {e}"))?;
-        let stdout = child.stdout.take().ok_or("no stdout")?;
+        let Some(stdout) = child.stdout.take() else {
+            terminate_tree(&mut child); // never leave an unregistered core running
+            return Err("cannot read the core's output".into());
+        };
         {
             let (lock, _) = &*self.inner;
             let mut inner = lock.lock().unwrap();

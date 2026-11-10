@@ -174,3 +174,53 @@ def test_rejected_llm_settings_keep_the_saved_key(tmp_path):  # 10
         assert c.llm.configured  # the bad request changed nothing
         c.secrets.set(key_name("openrouter"), None)
         assert not c.llm.configured  # a hosted provider without a key is not usable
+
+
+def test_root_changes_are_in_the_history(container, tmp_path):  # 17
+    folder = tmp_path / "r"
+    folder.mkdir()
+    root = container.ingestion.add_root(str(folder))
+    container.ingestion.add_root(str(folder), watch=False)
+    ops = [e["op"] for e in container.ledger.history("roots", root.id)]
+    assert ops == ["insert", "update"]
+
+
+def test_undo_restores_the_drops_own_state(container, tmp_path):  # 18
+    first = _labelled(container, tmp_path, "p")
+    container.drops.set_label(first["id"], "Moon base plans")
+    drain(container)
+    assert container.drops.get(first["id"])["project"]["name"] != first["project"]["name"]
+    container.ledger.undo()  # the re-label: the earlier organization comes back, plan included
+    again = container.drops.get(first["id"])
+    assert again["status"] == "organized" and again["project"]["id"] == first["project"]["id"]
+    assert again["plan"]["project_name"] == first["plan"]["project_name"]
+    container.ledger.undo()  # the first organizing: label it again
+    assert container.drops.get(first["id"])["status"] == "imported"
+
+
+def test_organizing_without_a_job_settles(container, tmp_path):  # 6
+    drop = _labelled(container, tmp_path, "p")
+    container.kdb["drops"].update_one({"_id": drop["id"]}, {"$set": {"status": "organizing"}})
+    assert container.drops.get(drop["id"])["status"] == "organized"
+
+
+def test_array_filters_run_in_sql_and_match_the_python_rules(container, tmp_path):  # 22
+    from folio_core.store.local import _where, matches
+
+    _labelled(container, tmp_path, "p")
+    sid = next(iter(container.kdb["sources"].find()))["_id"]
+    for query in ({"evidence.source_id": sid}, {"evidence.source_id": {"$in": [sid, "x"]}},
+                  {"evidence.source_id": {"$ne": sid}}, {"aliases.normalized": {"$regex": "rahul"}},
+                  {"$or": [{"evidence.source_id": sid}, {"status": "rejected"}]}):
+        assert _where(query) is not None
+        coll = "entities" if "aliases.normalized" in query else "claims"
+        fast = {d["_id"] for d in container.kdb[coll].find(query)}
+        slow = {d["_id"] for d in container.kdb[coll].find() if matches(d, query)}
+        assert fast == slow, query
+    assert container.kdb["claims"].count_documents({"evidence.source_id": sid}) > 0
+
+
+def test_confirming_an_empty_label_explains_why(container):  # 20
+    label = container.labels.preview("blah blah something", "none", [])
+    with pytest.raises(InvalidInput, match="select a file"):
+        container.labels.confirm(label.id)

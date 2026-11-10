@@ -34,7 +34,7 @@ class HybridSearch:
         self.embedder = embedder
         self.vectors = vectors
 
-    def search(self, q: str, k: int = 20, source_ids: list[str] | None = None) -> list[dict[str, Any]]:
+    def search(self, q: str, k: int = 20) -> list[dict[str, Any]]:
         conn = self.index.reader()
         pool = max(k * 4, 50)
         ranked: dict[int, float] = {}
@@ -68,8 +68,6 @@ class HybridSearch:
             r = by_id.get(rowid)
             src = sources.get(r["source_id"]) if r is not None else None
             if r is None or src is None or src.status.value in repo.HIDDEN_SOURCE_STATUSES:
-                continue
-            if source_ids and r["source_id"] not in source_ids:
                 continue
             hits.append({
                 "chunk_id": r["id"], "source_id": r["source_id"], "path": src.path, "kind": src.kind.value,

@@ -89,11 +89,11 @@ class IngestionService:
             raise InvalidInput(f"{p} does not exist")
         existing = self.kdb["roots"].find_one({"path": str(p)})
         if existing:
-            root = repo.root_from_doc(existing)
-            self.kdb["roots"].update_one({"_id": root.id}, {"$set": {
-                "watch": watch, "include_hidden": include_hidden,
-                "exclude": DEFAULT_EXCLUSIONS if exclude is None else exclude}})
-            root = repo.root_from_doc(self.kdb["roots"].find_one({"_id": root.id}))
+            with self.ledger.group("user", "root.update", str(p)) as tx:
+                row = tx.update("roots", existing["_id"], {
+                    "watch": watch, "include_hidden": include_hidden,
+                    "exclude": DEFAULT_EXCLUSIONS if exclude is None else exclude})
+            root = Root(**row)
         else:
             with self.ledger.group("user", "root.add", str(p)) as tx:
                 row = tx.insert("roots", {

@@ -7,7 +7,7 @@ import { basename, shortDate } from "@/lib/format";
 import { openProject, selectEntity, ui } from "@/state/selection";
 import { type Mode, ModeChoice } from "@/features/vault/ModeChoice";
 import { pickPaths } from "@/features/vault/pick";
-import { groupByFolder } from "@/lib/drops";
+import { dropCountLabel, groupByFolder } from "@/lib/drops";
 
 export function DropView() {
   const active = ui.use((s) => s.activeDrop);
@@ -117,7 +117,7 @@ function LabelCard({ dropId }: { dropId: string }) {
   return (
     <section className="drop-hero">
       <div className="row" style={{ justifyContent: "space-between", width: "100%", maxWidth: 760 }}>
-        <span className="tag-pill"><b>{drop.file_count} file{drop.file_count === 1 ? "" : "s"}</b>{drop.skipped ? `${drop.skipped} junk skipped` : "ready"}</span>
+        <span className="tag-pill"><b>{dropCountLabel(drop)}</b>{drop.skipped ? `${drop.skipped} junk skipped` : "ready"}</span>
         <button type="button" className="btn ghost sm" onClick={() => ui.set({ activeDrop: null })}><Icon name="plus" size={13} /> New drop</button>
       </div>
       {drop.status !== "organized" && (
@@ -207,7 +207,7 @@ function RecentDrops() {
             <span className="tiny muted ellipsis">{d.label ?? d.paths.map(basename).join(", ")}</span>
             <span className="row tiny" style={{ gap: 6 }}>
               <span className={`badge ${d.status === "organized" ? "ok" : d.status === "failed" ? "bad" : "warn"}`}>{d.status}</span>
-              <span className="muted">{d.file_count} files · {shortDate(d.created_at)}</span>
+              <span className="muted">{dropCountLabel(d)} · {shortDate(d.created_at)}</span>
             </span>
           </button>
         ))}

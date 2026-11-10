@@ -13,7 +13,7 @@ from ..store.local import KnowledgeDB, to_doc, to_row
 from ..store.local import Session as ClientSession
 
 # Collections whose documents are user knowledge. Only these are written through the ledger.
-TRACKED = frozenset({"settings", "schema_versions", "roots", "entities", "claims", "labels"})
+TRACKED = frozenset({"settings", "schema_versions", "roots", "entities", "claims", "labels", "drops"})
 
 UNDOABLE_ACTORS = ["user", "voice"]
 
