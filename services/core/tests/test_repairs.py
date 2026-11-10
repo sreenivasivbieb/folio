@@ -1,5 +1,6 @@
 """Regression tests for destructive failure paths, scanning, and resumable work."""
 
+import sys
 from copy import deepcopy
 from pathlib import Path
 
@@ -149,6 +150,7 @@ def test_unreadable_file_does_not_abort_scan(container, tmp_path, monkeypatch):
     assert [Path(s.path).name for s in repo.list_sources(container.kdb)] == ["good.txt"]
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="reads Linux /proc mountinfo; Windows lists drives")
 def test_locations_decode_spaces_and_are_not_checkout_specific(tmp_path):
     mounts = tmp_path / "mountinfo"
     mounts.write_text("30 1 8:1 / /mnt/My\\040Drive rw - ext4 /dev/sda1 rw\n")
@@ -194,3 +196,22 @@ def test_filename_pages_search_metadata_without_losing_results(container, tmp_pa
         assert first["total"] == 3 and first["sources"][0]["id"] != second["sources"][0]["id"]
         found = client.get("/api/files", params={"q": "literal[1]"}).json()
         assert found["total"] == 1 and found["sources"][0]["status"] == "metadata"
+
+
+def test_folder_added_inside_a_system_folder_is_still_indexed(container, tmp_path, monkeypatch):
+    # Windows lists %TEMP% as a system folder; a folder the user adds there must still be read,
+    # while scanning a parent folder keeps skipping it.
+    system = tmp_path / "system-temp"
+    inside = system / "my-notes"
+    inside.mkdir(parents=True)
+    (inside / "note.txt").write_text("Fixture text.")
+    (tmp_path / "outside.txt").write_text("Fixture text.")
+    monkeypatch.setattr("folio_core.ingestion.service.SYSTEM_EXCLUSIONS", [system.resolve()])
+
+    container.ingestion.add_root(str(tmp_path))
+    drain(container)
+    assert sorted(Path(s.path).name for s in repo.list_sources(container.kdb)) == ["outside.txt"]
+
+    container.ingestion.add_root(str(inside))
+    drain(container)
+    assert sorted(Path(s.path).name for s in repo.list_sources(container.kdb)) == ["note.txt", "outside.txt"]

@@ -135,9 +135,10 @@ class IngestionService:
         vault = data / "vault"
         # Folio's own data is never indexed — except the vault, where dumped files live.
         in_vault = resolved == vault or vault in resolved.parents
+        # A system folder is skipped while scanning around it, but a folder the user added that
+        # lives inside one (e.g. under /tmp or %TEMP%) is still indexed.
         if (not in_vault and (resolved == data or data in resolved.parents)) or any(
-                (resolved == p or p in resolved.parents)
-                and not (p in (Path("/tmp"), Path("/var/cache")) and (base == p or p in base.parents))
+                (resolved == p or p in resolved.parents) and not (base == p or p in base.parents)
                 for p in SYSTEM_EXCLUSIONS):
             return True
         return any(fnmatch(path.name, pattern) or fnmatch(str(path), pattern) for pattern in root.exclude)
