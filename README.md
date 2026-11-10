@@ -4,50 +4,172 @@
 
 **Drop your files, say what they are, and find everything later.**
 
-Folio is a desktop workspace for **Windows and Linux** (including Omarchy/Arch) built
-around one loop:
+Folio is a private, local-first desktop workspace for **Windows and Linux** (including
+Omarchy/Arch). You drop in files or a whole project folder and describe them in your own
+words, by typing or speaking. Folio then organizes them into a project with folders, tags,
+people and dates, and links everything into a searchable knowledge graph. Every fact
+points back to the file and line it came from.
 
-**Drop → Label (voice or text) → AI organizes → Graph & Search**
+![A drop organized into a project: the label, a summary, tags and the files grouped into folders](docs/screenshots/organized.png)
 
-1. **Drop** files or a whole project folder onto the window. Folio never scans your
-   computer, and it silently skips junk such as `node_modules`, `.git`, build output,
-   lockfiles and binaries.
-2. **Label** the drop in your own words — type it, or hold to speak in English, Hindi
-   or Hinglish.
-3. **The AI organizes** it from your label: a project, a short summary, folders for the
-   files, tags, and the people, organisations and dates you mentioned. Without an AI
-   model, offline rules do the same from your label and the folder layout.
-4. **Explore and search** a clean graph of projects, folders, files, people and topics,
-   and search by what you said, by project, by name, or by the text inside any file.
+<p align="center">
+  <b>Drop → Label (voice or text) → AI organizes → Graph &amp; Search</b>
+</p>
 
-Your files and knowledge stay in private local files on your machine. Choose offline
-processing, a local AI model, or a cloud AI provider with your own API key. Optional
-Google Drive backup uses your own Google account and OAuth credentials.
+- **Your files stay on your machine.** Everything lives in private local files. There is
+  no Folio account, no Folio server and no database to run.
+- **AI is optional.** Offline rules organize your drops with no network at all. You can
+  also connect a local model (Ollama) or a hosted provider with your own API key.
+- **Nothing is final.** You can re-label any drop, and Ctrl+Z undoes any action,
+  including organizing.
 
-[Install](#install) · [First drop](#your-first-drop) ·
-[Storage](#your-data-and-privacy) · [AI](#choose-your-ai) ·
-[Google Drive](#optional-google-drive-backup) · [Development](#development)
+**Contents:** [Tour](#a-tour-of-folio) · [Shortcuts](#keyboard-shortcuts) ·
+[Install](#install) · [First drop](#your-first-drop) · [Supported files](#supported-files) ·
+[Data &amp; privacy](#your-data-and-privacy) · [AI &amp; voice](#choose-your-ai-and-voice) ·
+[Backups](#backups-and-exports) · [How it works](#how-it-works) ·
+[Development](#development) · [Troubleshooting](#troubleshooting-and-current-limits)
 
-## What you can do
+---
 
-- **Drop & Label:** drop files or a project folder (or pick them), see how many files
-  will be added and how much junk is skipped, choose **Move** (files then live only in
-  Folio — no duplicate disk space) or **Copy**, then describe them by voice or text.
-- **Organize with AI:** one click turns your label into a project with a summary,
-  folders, tags, people and organisations. Re-label any time; Ctrl+Z undoes it.
-- **Projects:** every organized drop as a project — your original label, the AI
-  summary, people and tags, and the files grouped by folder. Optionally **Preview &
-  organize on disk** to move the original files into those folders (Copy drops only;
-  nothing moves until you confirm, and it can be undone).
-- **Graph:** projects, folders, files, people and topics, linked. Focus on a project,
-  person or tag, and highlight anything by name.
-- **Search everything** (`/` or Ctrl+K): your labels and project summaries first, then
-  project, tag and file names (typos and partial words are fine), then exact passages
-  with page numbers, lines or audio/video timestamps.
-- **Keep portable backups:** export JSON (including drops and projects), GraphML,
-  Markdown or CSV, and restore Folio JSON backups into an empty project.
-- **Keyboard first:** `1` `2` `3` switch between Drop & Label, Projects and Graph; `/`
-  searches; Ctrl+Space (held) records a voice label; Ctrl+Z / Ctrl+Shift+Z undo and redo.
+## A tour of Folio
+
+> The screenshots below use made-up demo files, organized by Folio's **offline rules**
+> with no AI model connected. A connected model writes richer summaries and folder names.
+
+### 1. Drop
+
+The **Drop &amp; Label** screen is the home screen. Drop files or a project folder anywhere
+on the window, or use **Choose files** / **Choose a folder**. Folio never scans your
+computer: it only sees what you give it. It shows how many files it will add, skips junk
+(`node_modules`, `.git`, build output, lockfiles, binaries…) and lets you pick:
+
+- **Move**: the files then live only in Folio's private vault, so nothing takes up disk
+  space twice.
+- **Copy**: your originals stay where they are.
+
+Files that are already in Folio are recognized by their content and reused, not
+duplicated.
+
+![The Drop & Label home screen with recent drops](docs/screenshots/drop.png)
+
+### 2. Label it in your own words
+
+Say what the files are. Type it, or **hold to speak** in English, Hindi or Hinglish
+(hold Ctrl+Space). Your spoken words go into the box first, so you can fix a misheard
+name before anything happens. Press **Organize with AI** (or Ctrl+Enter).
+
+![Labelling a drop: "Masters thesis on soil moisture sensing…"](docs/screenshots/label.png)
+
+### 3. Folio organizes it
+
+From your label, the file names and the first lines of each file, Folio creates:
+
+- a **project** with a short **summary**,
+- **folders** that group the files (every file lands in exactly one),
+- **tags** (topics),
+- the **people**, **organisations** and **dates** you mentioned. Dates also appear on
+  timelines.
+
+Each of these facts cites the files it came from. **Re-label** at any time to replace
+the organization. Ctrl+Z undoes it, and the drop goes back to waiting for a label.
+
+### 4. Projects
+
+Every organized drop becomes a project. A project shows your original label (as you
+said it), the summary, the people and tags, and the files grouped by folder.
+
+**Preview &amp; organize on disk** (available for *Copy* drops of a single folder) shows
+exactly how the original files would be rearranged into those folders. Nothing moves
+until you confirm, and the move can be undone.
+
+![The Pune Solar project: label, people, tags, date and folders](docs/screenshots/project.png)
+
+### 5. Graph
+
+The graph links projects, folders, files, people and topics. You can:
+
+- show **Everything** or only what is **Around** the current selection,
+- **Focus on** one project, person or tag,
+- **Highlight** nodes by name,
+- toggle **Show files**.
+
+Click a node to open its card on the right: what kind of thing it is, its files, and
+every fact about it. Each fact shows a confidence score and links to the exact
+passages that support it.
+
+![The knowledge graph with the Pune Solar project selected and its facts and evidence on the right](docs/screenshots/graph.png)
+
+### 6. Search everything
+
+Press `/` or Ctrl+K and type. Results come in this order:
+
+1. your labels and project summaries,
+2. project, tag, person and file names (typos and partial words are fine),
+3. exact passages inside your files, with page numbers, line numbers or audio/video
+   timestamps.
+
+Search combines keyword matching (SQLite FTS5) with vector similarity.
+
+![Searching "inverter quotes" finds the exact line in a meeting note](docs/screenshots/search.png)
+
+### 7. See where everything came from
+
+Open a result, or any piece of evidence, and the **evidence viewer** shows the quoted
+span in its file: the line, page, image region or moment in a recording.
+
+![The evidence viewer showing the quoted line from the vendor review note](docs/screenshots/evidence.png)
+
+### 8. Library, activity and trash
+
+The left sidebar holds:
+
+- **Library**: every file, with its project and folder tags. Filter by clicking a tag,
+  or search by file path.
+- **Activity**: background work such as imports, indexing and transcription, with
+  progress, errors and **Retry**.
+- **Trash**: removed files, which you can **restore**, delete permanently, or empty
+  all at once. Trashed files never appear in search.
+- **Add to Folio**, plus status cards showing whether an AI model and voice are set up.
+
+You can also export a stored file back to a folder on your computer.
+
+The bar at the bottom of the window lets you describe whatever is selected, by voice or
+text, for example *"Priya leads it"*, *"it is a Course"* or *"merge these two"*. You
+always see a preview first, and one Ctrl+Z undoes it.
+
+### 9. Light or dark
+
+Folio has a light theme (the default), a dark theme, or it can follow your system
+(**Settings → Appearance**).
+
+![The graph in dark mode](docs/screenshots/dark-mode.png)
+
+### 10. Settings
+
+![Settings → AI model: choose a provider, base URL, API key and model](docs/screenshots/settings-ai.png)
+
+| Tab | What it controls |
+| --- | --- |
+| **AI model** | Offline, Ollama, OpenRouter, OpenAI, Qwen, Groq or any OpenAI-compatible URL: key, model list, **Test** |
+| **Voice** | Speech through your provider's Whisper, or the offline speech model (~480 MB, downloaded once); push-to-talk setup |
+| **Privacy** | Cloud processing on/off, shown as **Local AI** / **Cloud AI** in the top bar |
+| **Type hints** | Optional hints for your own kinds of things and relations: colours, spoken phrases ("signed" → signed_on), date parsing and suggestions for the AI. Any type is accepted |
+| **Data** | Export and restore, **Re-run extraction**, **Rebuild search index** |
+| **Google Drive** | Optional backup to your own Google account |
+| **Appearance** | Light, dark or system theme |
+
+## Keyboard shortcuts
+
+| Keys | Action |
+| --- | --- |
+| `1` `2` `3` | Switch to Drop &amp; Label, Projects, Graph |
+| `/` or Ctrl+K | Search |
+| Ctrl+Space (hold) | Record a voice label on the Drop screen |
+| Ctrl+Enter | Organize the drop with the typed label |
+| Ctrl+Z | Undo the last action (organizing, labels, edits) |
+| Ctrl+Shift+Z or Ctrl+Y | Redo |
+| Enter | Confirm a label preview |
+| Esc | Close search, the evidence viewer or an open file |
 
 ## Install
 
@@ -60,20 +182,21 @@ Google Drive backup uses your own Google account and OAuth credentials.
 | Omarchy / Arch | `folio-desktop-x.y.z-1-x86_64.pkg.tar.zst` | `scripts/build-omarchy.sh` (below) |
 
 Every installer bundles the core service, speech recognition, audio/video decoding and
-microphone support — no Python, ffmpeg or other runtime to install. Windows uses the
-system WebView2 (the installer fetches it if missing). Push a tag like `v0.3.0` (or run
-the workflow manually) to build all of them; tagged builds are attached to a draft
-GitHub release with SHA-256 checksums.
+microphone support. You don't need to install Python, ffmpeg or any other runtime.
+Windows uses the system WebView2, and the installer fetches it if it's missing. Push a tag
+like `v0.3.0` (or run the workflow manually) to build all of them. Tagged builds are
+attached to a draft GitHub release with SHA-256 checksums.
 
-## Install on Omarchy
+### Omarchy / Arch Linux
 
-The current package target is **Omarchy / Arch Linux, x86_64**, version **0.2.0**.
-GitHub release assets have not been published yet. Build the installer from this
-repository, or install a package produced by the build below.
+The current package target is **Omarchy / Arch Linux, x86_64**, version **0.2.0**. GitHub
+release assets have not been published yet, so build the package from this repository.
 
-### Build the installer
+The package is named `folio-desktop` because the AUR's `folio` is an unrelated GNOME
+notes app. The two conflict and can't be installed together. The command you run is
+still `folio`.
 
-The build machine needs these tools and libraries:
+**Build requirements**
 
 | Requirement | Used for |
 | --- | --- |
@@ -83,8 +206,8 @@ The build machine needs these tools and libraries:
 | Arch `base-devel` and `zstd` | Native compilation and package creation |
 | `webkit2gtk-4.1`, `gtk3`, `openssl`, `portaudio`, `xdg-utils` | Desktop, audio and system-browser integration |
 
-See the [Tauri Linux prerequisites](https://v2.tauri.app/start/prerequisites/) for
-system dependency setup. Python 3.12 is selected by the core project's configuration.
+See the [Tauri Linux prerequisites](https://v2.tauri.app/start/prerequisites/) for system
+dependency setup.
 
 ```bash
 git clone https://github.com/sreenivasivbieb/folio.git
@@ -102,9 +225,7 @@ The build writes these files to `artifacts/`:
 | `folio-omarchy-x86_64.tar.zst` | Portable desktop app and bundled core service |
 | `SHA256SUMS` | Checksums for both artifacts |
 
-### Install and launch
-
-From the `artifacts/` folder:
+**Install and launch** (from `artifacts/`):
 
 ```bash
 sha256sum --check SHA256SUMS
@@ -112,42 +233,32 @@ sudo pacman -U ./folio-desktop-0.2.0-1-x86_64.pkg.tar.zst
 folio
 ```
 
-You can also open **Folio** from the Omarchy launcher with `Super+Space`.
-The installed package includes the interface and Python service. Development tools
-and a source checkout are only needed to build it. MongoDB and Docker are not required.
-
-For a portable run, extract the archive and keep its two executables together:
+Or open **Folio** from the Omarchy launcher (`Super+Space`). For a portable run, extract
+the archive and keep its two executables together:
 
 ```bash
 tar --zstd -xf folio-omarchy-x86_64.tar.zst
 ./folio-omarchy/folio
 ```
 
-The portable app needs the same runtime libraries as the Arch package. See
-[installation details](docs/INSTALL.md) for storage, removal and migration notes.
+See [installation details](docs/INSTALL.md) for storage, removal and migration notes.
 
 ## Your first drop
 
-1. Open Folio. The **Drop & Label** screen is the home screen.
-2. Drop files or a project folder onto the window, or use **Choose files** /
-   **Choose a folder**. Folio shows how many files it will add and how many junk files
-   it skips.
+1. Open Folio. **Drop &amp; Label** is the home screen.
+2. Drop a project folder onto the window, or use **Choose a folder**. Folio shows how
+   many files it will add and how many junk files it skips.
 3. Choose **Move** or **Copy**, then **Add**.
-4. Say or type what the files are — for example *"Final architecture docs, datasets and
-   meeting notes with Rahul for the Pune Solar project"*. **Hold to speak** fills the
-   box with your words so you can check them first.
-5. Click **Organize with AI**. The result shows the project, summary, folders, people
-   and tags; open it in **Projects** or view it in the **Graph**.
+4. Describe the files. For example: *"Final architecture docs, datasets and meeting
+   notes with Rahul for the Pune Solar project"*. To speak instead, hold
+   **Hold to speak** or Ctrl+Space.
+5. Click **Organize with AI**. Open the result in **Projects** or view it in the
+   **Graph**, then try searching for something inside one of the files.
 
-Skipped automatically when you drop a folder: hidden files and folders, `.git`, `.svn`,
-`.hg`, `node_modules`, `bower_components`, virtual environments (`venv`, `.venv`,
-`env`), caches (`__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.cache`),
-build output (`target`, `dist`, `build`, `out`, `.next`, `.nuxt`), editor folders,
-lockfiles, binaries (`.exe`, `.dll`, `.so`, `.dylib`, `.o`, `.pyc`, `.class`, `.jar`,
-`.wasm`) and disk images (`.iso`, `.img`, `.vmdk`). Supported formats get content
-indexing; other formats are kept as **Metadata only**.
+You can label a drop while it is still importing; it is organized as soon as the
+files are in.
 
-### Supported content
+## Supported files
 
 | File family | Extensions | Processing |
 | --- | --- | --- |
@@ -155,24 +266,34 @@ indexing; other formats are kept as **Metadata only**.
 | PDF | `.pdf` | Text extraction; scanned pages use optional Tesseract OCR |
 | Word | `.docx` | Document text extraction |
 | Subtitles | `.srt`, `.vtt` | Text with timestamps |
-| Images | `.png`, `.jpg`, `.jpeg`, `.webp`, `.tif`, `.tiff`, `.bmp`, `.gif` | Optional OCR; basic image details when text is unavailable |
-| Audio | `.mp3`, `.wav`, `.m4a`, `.ogg`, `.oga`, `.opus`, `.flac`, `.aac`, `.wma` | Transcription with timestamps (offline model, or your provider's Whisper) |
-| Video | `.mp4`, `.mkv`, `.mov`, `.webm`, `.avi`, `.m4v`, `.wmv` | Transcription of the audio track (videos without audio are kept as-is) |
+| Images | `.png`, `.jpg`, `.jpeg`, `.webp`, `.tif`, `.tiff`, `.bmp`, `.gif` | Optional OCR; basic image details when there is no text |
+| Audio | `.mp3`, `.wav`, `.m4a`, `.ogg`, `.oga`, `.opus`, `.flac`, `.aac`, `.wma` | Transcription with timestamps (your provider's Whisper or the offline model) |
+| Video | `.mp4`, `.mkv`, `.mov`, `.webm`, `.avi`, `.m4v`, `.wmv` | Transcription of the audio track (videos without audio are kept as they are) |
 
-OCR requires Tesseract with English language data (optional on every platform).
-Audio/video transcription uses your connected Groq/OpenAI account, or the offline speech
-model you download once in **Settings → Voice** (~480 MB). Decoding is built in — no
-ffmpeg needed.
+Other files (for example `.csv` or `.bib`) are kept as **Metadata only**. They are stored,
+organized into folders and findable by name, but their contents are not indexed.
+
+OCR needs Tesseract with English language data (optional). Audio and video decoding is
+built in, with no ffmpeg needed.
+
+**Skipped automatically** when you drop a folder:
+- hidden files and folders, plus `.git`, `.svn` and `.hg`
+- `node_modules` and `bower_components`
+- virtual environments (`venv`, `.venv`, `env`)
+- caches (`__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.cache`)
+- build output (`target`, `dist`, `build`, `out`, `.next`, `.nuxt`)
+- editor folders and lockfiles
+- binaries (`.exe`, `.dll`, `.so`, `.dylib`, `.o`, `.pyc`, `.class`, `.jar`, `.wasm`)
+- disk images (`.iso`, `.img`, `.vmdk`)
 
 ## Your data and privacy
 
-**Folio has no developer-operated storage service, shared database or required Folio
-account.** Each operating-system user has their own local app data.
+**Folio has no developer-operated storage service, no shared database and no Folio
+account.** Each operating-system user has their own local app data:
+`~/.local/share/folio/` on Linux (or `$XDG_DATA_HOME/folio/`), `%APPDATA%\folio\` on
+Windows.
 
-The default folder is `~/.local/share/folio/` on Linux (or `$XDG_DATA_HOME/folio/` when
-`XDG_DATA_HOME` is set) and `%APPDATA%\folio\` on Windows:
-
-| Local file or folder | Contents |
+| File or folder | Contents |
 | --- | --- |
 | `vault/` | Files you dropped into Folio (moved or copied), and Folio's trash |
 | `knowledge.sqlite3` | Drops, labels, projects, entities, links, settings and undo history |
@@ -181,119 +302,126 @@ The default folder is `~/.local/share/folio/` on Linux (or `$XDG_DATA_HOME/folio
 | `labels/` | Locally recorded voice-label audio |
 | `logs/core.log` | Rotating startup and runtime logs |
 
-Set `FOLIO_DATA_DIR` before launching to choose another local storage folder. The
-Linux app data folder uses private permissions (`0700`); credentials use `0600`.
-These are local SQLite files, with no database server to start or administer.
+Set `FOLIO_DATA_DIR` to use another folder. On Linux the data folder is private (`0700`)
+and credentials are `0600`. API keys never go into the database, exports or backups.
 
-You control the connections that can send data elsewhere:
+You control every connection that can send data elsewhere:
 
-| Choice | Data handling |
+| Choice | What leaves your computer |
 | --- | --- |
-| Default offline processing | Rule-based organizing and search run on this device |
-| Local AI endpoint | Document text goes to the local model server you configure |
-| Hosted AI provider | Your labels, file names and short text snippets are sent to your chosen provider using your key; with voice through the provider, label audio is too |
-| Google Drive **Back up now** | A knowledge backup is uploaded to your Google account |
+| Offline (default) | Nothing: organizing and search run on this device |
+| Local AI endpoint (e.g. Ollama) | Text goes only to the model server you run |
+| Hosted AI provider | Your labels, file names and short text snippets go to your chosen provider with your key; voice labels too if you use the provider's Whisper |
+| Google Drive **Back up now** | A knowledge backup goes to your own Google account |
 
-Credentials are excluded from knowledge exports and Drive backups. Backups can contain
-document excerpts, source paths and history, so choose their destination accordingly.
-Removing the app retains your local app data (including files you moved into Folio's
-vault) and any originals you copied from.
+The top bar always shows **Local AI** or **Cloud AI**. Turn cloud processing off in
+**Settings → Privacy**. Uninstalling the app keeps your data folder, including files you
+moved into the vault.
 
-## Choose your AI
+## Choose your AI and voice
 
-Folio works without an AI account: offline rules organize each drop from your label
-and the folder layout. A connected model understands any phrasing and organizes better.
+Folio works without an AI account: offline rules organize each drop from your label and
+the folder layout. A connected model understands any phrasing and organizes better.
 
 In **Settings → AI model**:
 
-1. Choose **Ollama** for a model running on this computer, or a custom local
-   OpenAI-compatible endpoint. Start your local model server separately.
-2. Alternatively, choose a hosted preset such as OpenRouter, OpenAI, Qwen or Groq,
-   or enter a custom compatible URL, and supply your own API key.
-3. Use **Load models**, select an available model, and **Save**. Use **Test** to check
-   the connection.
+1. Choose **Ollama** for a model on this computer (start the Ollama server yourself),
+   or a hosted preset (**OpenRouter**, **OpenAI**, **Qwen**, **Groq**), or any
+   **custom OpenAI-compatible** URL. Hosted providers need your own API key.
+2. Click **Load models**, pick one, and **Save**. **Test** checks the connection.
 
-With Groq or OpenAI connected, voice labels also work right away through the provider's
-Whisper; download the offline speech model in **Settings → Voice** to keep audio on
-your computer. Free tiers rate-limit requests: Folio waits and retries instead of failing.
+**Voice:** with Groq or OpenAI connected, voice labels work right away through the
+provider's Whisper. To keep audio on your computer, download the offline speech model
+in **Settings → Voice** instead. Labels are understood in English, Hindi and Hinglish.
 
-Saving a hosted endpoint enables cloud processing for the project. The top bar shows
-**Local AI** or **Cloud AI**. Disable cloud processing in **Settings → Privacy**.
-Working knowledge remains in your local Folio files with either choice.
+Free tiers rate-limit requests. Folio waits and retries, and if the model still doesn't
+answer it falls back to the offline rules, so a drop is always organized.
 
-Deep fact extraction (every person and fact in every passage, for review) is off by
-default; run it on demand with **Settings → Data → Re-run extraction**.
+**Deep extraction** (every person and fact in every passage, for you to review) is off
+by default. Run it when you want with **Settings → Data → Re-run extraction**.
 
-## Optional Google Drive backup
+## Backups and exports
 
-Drive integration backs up and restores your Folio knowledge using **your own Google
-Cloud project, OAuth client and Google account**.
+**Settings → Data** exports your knowledge as:
 
-1. In your Google Cloud project, enable the Drive API and create an OAuth client
-   with application type **Desktop app**. Follow
-   [Google's Desktop OAuth setup](https://developers.google.com/identity/protocols/oauth2/native-app).
-2. Download that client's credentials JSON.
-3. Open **Settings → Google Drive** and import the JSON.
-4. Choose **Prepare Google sign-in**, then **Continue in system browser**, and
-   authorize with your Google account.
-5. Choose **Back up now** whenever you want to save a backup.
+| Format | Contents |
+| --- | --- |
+| JSON | Everything, including drops, projects and full history. Can be restored into an empty project |
+| GraphML | The graph with provenance; opens in Gephi or yEd |
+| Markdown | Readable notes, one section per entity |
+| CSV (zip) | Entities, aliases, facts and evidence tables |
 
-Folio uses a local callback, PKCE and Google's `drive.file` scope for its backups;
-see [Google's scope documentation](https://developers.google.com/workspace/drive/api/guides/api-specific-auth).
-Uploads are manual. A backup includes drops and their labels, projects, knowledge,
-evidence quotes, local source paths, settings and history. The files themselves (including
-those in Folio's `vault/`), recorded audio, API keys and OAuth tokens are excluded — copy
-the `vault/` folder separately if you want the files too.
+Exports and backups contain knowledge, evidence quotes, source paths and history, but
+**not the files themselves**. Copy the `vault/` folder separately if you want the files
+too.
 
-Use the same OAuth client on another device to access its backups. **Restore locally**
-requires an empty local project; put the `vault/` folder back (or the original files)
-to reopen documents. **Disconnect locally** removes this device's Drive credentials.
-Google account permissions can also be revoked in your Google account.
+### Optional Google Drive backup
 
-For a local backup, use **Settings → Data** to export JSON and restore it into an empty
-project. Older Folio JSON exports are supported; existing MongoDB Docker volumes are
-left untouched and are not automatically migrated.
+Drive backup uses **your own Google Cloud project, OAuth client and Google account**:
+
+1. In Google Cloud, enable the Drive API and create an OAuth client of type
+   **Desktop app** ([Google's guide](https://developers.google.com/identity/protocols/oauth2/native-app)).
+   Download its credentials JSON.
+2. In **Settings → Google Drive**, import the JSON. Then choose **Prepare Google
+   sign-in** → **Continue in system browser** and authorize.
+3. Choose **Back up now** whenever you want a backup.
+
+Folio uses a local callback, PKCE and the narrow `drive.file` scope. Uploads only happen
+when you choose **Back up now**. **Restore locally** needs an empty local project and
+the same OAuth client. **Disconnect locally** removes this device's Drive credentials.
+
+## How it works
+
+```
+Folio desktop app (Tauri)
+  └─ React UI ── HTTP on 127.0.0.1 + per-session token ──▶ Python core (FastAPI)
+
+Python core
+  Drop  ─▶ import job   ─▶ vault/ ─▶ parse & chunk ─▶ index.db (FTS5 + sqlite-vec)
+  Label ─▶ organize job ─▶ AI model or offline rules ─▶ plan ─▶ knowledge.sqlite3 (via the ledger)
+  Search ─▶ labels & summaries + names + passages ─▶ results with evidence
+```
+
+- The **desktop shell** (Rust/Tauri) starts the **core** on a random local port with a
+  fresh secret token for each session. If the core exits, the shell restarts it.
+- The **core** (Python/FastAPI) runs imports, parsing, transcription, indexing and
+  organizing as background jobs. Jobs survive restarts, and a long import never blocks
+  the UI.
+- **Knowledge** (projects, people, topics and facts with evidence) is written through an
+  append-only **ledger**. Undo/redo works across every kind of change, and each record
+  has a history.
+- **Search** combines SQLite FTS5 keyword ranking with sqlite-vec vector similarity.
+
+More detail: [docs/architecture.md](docs/architecture.md) and the decisions in
+[docs/adr](docs/adr).
 
 ## Development
 
-With Node.js 22.12+, npm and uv installed, run these commands from the repository root:
+With Node.js 22.12+, npm and uv installed, from the repository root:
 
 ```bash
 npm ci
 uv sync --project services/core
-npm run dev
+npm run dev            # core + UI together; open http://127.0.0.1:1420
 ```
 
-Open **http://127.0.0.1:1420**. This starts the backend and interface together;
-`Ctrl+C` stops both. Separate commands are `npm run dev:core` and `npm run dev:ui`.
-Native desktop development also needs Rust and the Tauri system libraries:
-
-```bash
-npm run dev:desktop
-```
-
-For speech support in a development environment:
-
-```bash
-uv sync --project services/core --extra speech
-```
-
-Then download the speech model explicitly in **Settings → Voice**.
+`npm run dev:core` and `npm run dev:ui` start them separately. `npm run dev:desktop`
+runs the native shell (needs Rust and the Tauri libraries). For speech in development,
+run `uv sync --project services/core --extra speech`, then download the model in
+**Settings → Voice**.
 
 ### Checks
 
 ```bash
-npm run test:core
-npm run lint:core
-npm run typecheck
-npm test -w @folio/ui
+npm run test:core      # Python tests (temporary local storage, no network)
+npm run lint:core      # ruff
+npm run typecheck      # TypeScript
+npm test -w @folio/ui  # UI unit tests
 npm run build:ui
-npm run eval
+npm run eval           # extraction precision/recall gate on fixtures
 ```
 
 After changing API endpoints, regenerate the typed client with `npm run gen:client`.
-Tests use temporary local storage. The extraction quality gate uses small fixtures;
-it measures the rule extractor on those fixtures, rather than live AI model quality.
 
 ### Repository layout
 
@@ -305,31 +433,28 @@ it measures the rule extractor on those fixtures, rather than live AI model qual
 | [`packages/api-client`](packages/api-client) | Generated OpenAPI types and typed HTTP client |
 | [`pkgbuild`](pkgbuild) | Arch package metadata and desktop entry |
 | [`scripts/build-omarchy.sh`](scripts/build-omarchy.sh) | Omarchy package and portable archive builder |
-| [`docs/architecture.md`](docs/architecture.md) | Data flow, persistence and implementation boundaries |
-| [`docs/adr`](docs/adr) | Architecture decisions, including the local-storage migration |
+| [`docs`](docs) | Architecture, install notes, ADRs and these screenshots |
 
 ## Troubleshooting and current limits
 
-| Symptom | Where to look |
+| Symptom | What to do |
 | --- | --- |
-| Core service fails to start | Inspect `logs/core.log` in your data folder; check whether another Folio instance is using that folder |
-| Fewer files were added than you dropped | Junk (hidden, `node_modules`, build output, lockfiles, binaries) is skipped on purpose — the drop card shows the count; duplicates already in Folio are reused |
-| A drop stays "Organizing…" | A rate-limited AI provider is being waited on; without a reply Folio falls back to offline rules. See Activity |
-| "Organize on disk" is disabled | It needs a single folder dropped with **Copy**; moved files live in Folio — use Export first |
-| A file says **Metadata only** | Its format has no content parser; its path and metadata are still inventoried |
-| Images or scanned PDFs have no extracted text | Check Tesseract and its English language data |
-| Audio/video has no transcript | Connect Groq/OpenAI or download the speech model (Settings → Voice); videos without an audio track are kept without one |
-| Voice: nothing happens on Wayland | Apps can't grab global keys there: bind a desktop shortcut to `folio-core voice toggle` (Settings → Voice) |
-| Voice: a name is misheard | On the Drop screen, just edit the label box before **Organize with AI**; elsewhere, click **Edit** in the label preview and **Re-check** |
-| A project disappeared after Ctrl+Z | Undo also reverts organizing; the drop asks for its label again (or press Ctrl+Shift+Z) |
-| AI connection fails | Check the local server or hosted provider URL, model and your API key; use **Test** |
-| Drive restore is unavailable | Restore into an empty project using the OAuth client that created the backup |
+| Core service fails to start | Read `logs/core.log` in your data folder; check that no other Folio instance is using it |
+| Fewer files were added than you dropped | Junk is skipped on purpose and files already in Folio are reused; the drop card shows the counts |
+| A drop stays "Organizing…" | A rate-limited provider is being waited on; Folio falls back to offline rules. See **Activity** |
+| "Organize on disk" is disabled | It needs a single folder dropped with **Copy**; moved files live in Folio (export them first) |
+| A file says **Metadata only** | Its format has no content parser; it is still stored, organized and findable by name |
+| Images or scanned PDFs have no text | Install Tesseract and its English language data |
+| Audio/video has no transcript | Connect Groq/OpenAI or download the speech model (**Settings → Voice**) |
+| Voice: nothing happens on Wayland | Apps can't grab global keys there: bind a desktop shortcut to `folio-core voice toggle` |
+| Voice: a name is misheard | Edit the label box before **Organize with AI** (elsewhere: **Edit** in the preview, then **Re-check**) |
+| A project disappeared after Ctrl+Z | Undo also reverts organizing; press Ctrl+Shift+Z to redo, or label the drop again |
+| AI connection fails | Check the URL, model and API key, then use **Test** |
+| Drive restore is unavailable | Restore into an empty project using the OAuth client that made the backup |
 
-The Omarchy x86_64 package has been built and checked with generated sample files,
-and the drop → label → organize → graph flow has been exercised end to end in a browser
-against a real hosted model (Groq). Live Google sign-in, native file drag-and-drop in the
-desktop window, and native Wayland interaction still need validation on target
-installations. CI runs the core test suite on Linux and Windows and
-builds the desktop shell on Linux, macOS and Windows; the release workflow builds and
-smoke-tests the bundled core for the Windows and Linux installers. Installing and using
-them on real Windows/Linux machines (microphone, WebView2) still needs a manual check.
+**Validation status:** the Omarchy x86_64 package has been built and checked, and the
+drop → label → organize → graph → search flow has been exercised end to end, offline and
+against a real hosted model (Groq). CI runs the core tests on Linux and Windows and
+builds the desktop shell on Linux, macOS and Windows. Still to be checked by hand on real
+installs: live Google sign-in, native drag-and-drop in the desktop window, native Wayland
+interaction, and microphone/WebView2 on Windows.
