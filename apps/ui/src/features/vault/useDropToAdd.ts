@@ -16,7 +16,7 @@ export function useDropToAdd(): boolean {
         else if (p.type === "leave") setOver(false);
         else if (p.type === "drop") {
           setOver(false);
-          if (p.paths.length) openAdd(Array.from(new Set([...(ui.get().modal === "add" ? ui.get().pendingPaths : []), ...p.paths])));
+          if (p.paths.length) openAdd(Array.from(new Set([...(ui.get().activeDrop ? [] : ui.get().pendingPaths), ...p.paths])));
         }
       }).then((u) => {
         if (cancelled) u();

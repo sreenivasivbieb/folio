@@ -64,11 +64,10 @@ export function EntityCardPanel({ entityId }: { entityId: string }) {
             onKeyDown={(ev) => { if (ev.key === "Enter" && alias.trim()) { actions.addAlias.mutate({ id: e.id, alias: alias.trim() }); setAlias(""); } }} />
         </div>
         <div className="stat-row" style={{ marginTop: 12 }}>
-          <div className="stat"><b>{card.counts.verified ?? 0}</b><span>verified</span></div>
-          <div className="stat"><b style={{ color: card.counts.proposed ? "var(--warn)" : undefined }}>{card.counts.proposed ?? 0}</b><span>to review</span></div>
           <div className="stat"><b>{card.files.length}</b><span>files</span></div>
-          <button type="button" className="stat btn ghost" style={{ height: "auto", flexDirection: "column", alignItems: "flex-start" }} onClick={() => ui.set({ focusEntity: e.id, view: "timeline" })}>
-            <Icon name="clock" /><span>timeline</span>
+          <div className="stat"><b>{(card.counts.verified ?? 0) + (card.counts.proposed ?? 0)}</b><span>links</span></div>
+          <button type="button" className="stat btn ghost" style={{ height: "auto", flexDirection: "column", alignItems: "flex-start" }} onClick={() => ui.set({ focusEntity: e.id, view: "graph" })}>
+            <Icon name="graph" /><span>show in graph</span>
           </button>
         </div>
       </div>

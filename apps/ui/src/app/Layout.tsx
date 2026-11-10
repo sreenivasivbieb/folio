@@ -1,7 +1,7 @@
 /**
  * App shell:
- *   sidebar   — Library / Review / Activity, plus AI-model and voice status
- *   main      — the four views over one data model (graph, swimlane, timeline, table)
+ *   sidebar   — Library / Activity / Trash, plus AI-model and voice status
+ *   main      — Drop & Label (intake), Projects (what the AI organized), Graph
  *   inspector — evidence viewer, file viewer, or the selected entity's card
  *   composer  — push-to-talk and typed labels
  */
@@ -14,25 +14,22 @@ import { EvidenceViewer, SourceViewer } from "@/features/evidence/EvidenceViewer
 import { SearchPalette } from "@/features/search/SearchPalette";
 import { SettingsModal } from "@/features/settings/SettingsModal";
 import { VoiceBar } from "@/features/voice/VoiceBar";
-import { AddModal } from "@/features/vault/AddModal";
 import { ExportModal } from "@/features/vault/ExportModal";
 import { useDropToAdd } from "@/features/vault/useDropToAdd";
 import { openAdd, openSettings, type ViewName, ui } from "@/state/selection";
 import { toasts } from "@/state/toast";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { GraphView } from "@/views/graph/GraphView";
-import { SwimlaneView } from "@/views/swimlane/SwimlaneView";
-import { TableView } from "@/views/table/TableView";
-import { TimelineView } from "@/views/timeline/TimelineView";
+import { DropView } from "@/views/drop/DropView";
+import { ProjectsView } from "@/views/projects/ProjectsView";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { useShortcuts } from "./useShortcuts";
 
 const VIEWS: { id: ViewName; label: string; icon: IconName }[] = [
+  { id: "drop", label: "Drop & Label", icon: "download" },
+  { id: "projects", label: "Projects", icon: "layers" },
   { id: "graph", label: "Graph", icon: "graph" },
-  { id: "swimlane", label: "Swimlane", icon: "lanes" },
-  { id: "timeline", label: "Timeline", icon: "clock" },
-  { id: "table", label: "Table", icon: "table" },
 ];
 
 /** Tells the user what to do next instead of showing an empty canvas. */
@@ -82,37 +79,24 @@ function MainArea() {
         <span className="spacer" />
         {status && (
           <span className="small muted">
-            {status.counts.entities} entities · {status.counts.claims} facts
-            {status.counts.proposed ? <> · <button type="button" className="btn ghost sm" style={{ color: "var(--warn)" }} onClick={() => ui.set({ leftTab: "review" })}>{status.counts.proposed} to review</button></> : null}
+            {status.counts.sources} files · {status.counts.entities} in the graph
           </span>
         )}
       </div>
-      {empty ? (
-        <div className="view" style={{ display: "grid", placeItems: "center" }}>
-          <EmptyState
-            icon="download"
-            tag={["Your vault", "Stored locally, in one place"]}
-            title={<>Dump your files into <b>Folio</b></>}
-            actions={<>
-              <button type="button" className="btn primary" onClick={() => openAdd()}><Icon name="plus" /> Add to Folio</button>
-            </>}
-          >
-            Drop files or folders onto this window, or choose them. Each time you decide: <b>move</b> them in (they then live only
-            in Folio — no duplicate disk space) or <b>copy</b> them. PDFs, scans, images, Word and Markdown, audio, video and transcripts
-            become searchable, connected knowledge.
-          </EmptyState>
-        </div>
-      ) : (
-        <>
-          <Onboarding />
-          <ErrorBoundary resetKey={view}>
-            {view === "graph" && <GraphView />}
-            {view === "swimlane" && <SwimlaneView />}
-            {view === "timeline" && <TimelineView />}
-            {view === "table" && <TableView />}
-          </ErrorBoundary>
-        </>
-      )}
+      <ErrorBoundary resetKey={view}>
+        {view === "drop" && <DropView />}
+        {view === "projects" && <ProjectsView />}
+        {view === "graph" && (empty
+          ? (
+            <div className="view" style={{ display: "grid", placeItems: "center" }}>
+              <EmptyState icon="graph" tag={["Graph", "Built from your labels"]} title={<>Nothing to <b>connect</b> yet</>}
+                actions={<button type="button" className="btn primary" onClick={() => openAdd()}><Icon name="plus" /> Drop files</button>}>
+                Drop files and label them: projects, folders, people and topics appear here, linked.
+              </EmptyState>
+            </div>
+          )
+          : <><Onboarding /><GraphView /></>)}
+      </ErrorBoundary>
     </main>
   );
 }
@@ -156,21 +140,21 @@ export function Layout() {
   useCoreEvents();
   useShortcuts();
   const modal = ui.use((s) => s.modal);
+  const view = ui.use((s) => s.view);
   const dragging = useDropToAdd();
   return (
     <div className="app">
       <TopBar />
       <Sidebar />
       <MainArea />
-      <VoiceBar />
+      {view !== "drop" && <VoiceBar />}
       <Inspector />
       <Toasts />
       {modal === "search" && <SearchPalette />}
       {modal === "settings" && <SettingsModal />}
-      {modal === "add" && <AddModal />}
       {modal === "export" && <ExportModal />}
       {dragging && (
-        <div className="drop-overlay"><div><Icon name="download" size={30} /><b>Drop to add to Folio</b><span>You'll choose to move or copy next</span></div></div>
+        <div className="drop-overlay"><div><Icon name="download" size={30} /><b>Drop to add to Folio</b><span>Then say or type what these files are</span></div></div>
       )}
     </div>
   );

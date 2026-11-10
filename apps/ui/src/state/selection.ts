@@ -12,8 +12,8 @@ export type Selection =
   | { kind: "claim"; ids: string[] }
   | { kind: "source"; id: string };
 
-export type ViewName = "graph" | "swimlane" | "timeline" | "table";
-export type LeftTab = "sources" | "review" | "activity" | "trash";
+export type ViewName = "drop" | "projects" | "graph";
+export type LeftTab = "sources" | "activity" | "trash";
 export type SettingsTab = "ai" | "voice" | "privacy" | "hints" | "data" | "drive" | "appearance";
 
 interface UiState {
@@ -27,6 +27,8 @@ interface UiState {
   recording: boolean;
   modal: "none" | "search" | "settings" | "add" | "export";
   pendingPaths: string[]; // files/folders picked or dropped, waiting for "Add to Folio"
+  activeDrop: string | null; // the drop being labelled on the Drop screen
+  projectDrop: string | null; // the drop whose project is open in Projects
   exportId: string | null; // the stored file being exported
   settingsTab: SettingsTab;
 }
@@ -34,7 +36,7 @@ interface UiState {
 export const ui = createStore<UiState>({
   selection: { kind: "none" },
   focusEntity: null,
-  view: "graph",
+  view: "drop",
   leftTab: "sources",
   evidence: null,
   openSourceId: null,
@@ -42,6 +44,8 @@ export const ui = createStore<UiState>({
   recording: false,
   modal: "none",
   pendingPaths: [],
+  activeDrop: null,
+  projectDrop: null,
   exportId: null,
   settingsTab: "ai",
 });
@@ -92,5 +96,9 @@ export function labelTarget(sel: Selection): { target_kind: "source" | "entity" 
 
 /** Open the "Add to Folio" dialog, optionally with files already chosen (e.g. dropped on the window). */
 export function openAdd(paths: string[] = []) {
-  ui.set({ modal: "add", pendingPaths: paths });
+  ui.set({ view: "drop", modal: "none", pendingPaths: paths, activeDrop: null });
+}
+
+export function openProject(dropId: string) {
+  ui.set({ view: "projects", projectDrop: dropId });
 }

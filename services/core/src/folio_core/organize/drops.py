@@ -359,6 +359,15 @@ class DropService:
                 done.append(m)
         finally:  # record what actually moved, so undo is always possible
             self._record_disk(drop, preview["root"], done)
+        root = Path(preview["root"])
+        for m in done:  # tidy: folders the moves left empty (never the root itself)
+            parent = Path(m["from"]).parent
+            while parent != root and root in parent.parents:
+                try:
+                    parent.rmdir()
+                except OSError:
+                    break  # not empty (other files, or junk like node_modules): keep it
+                parent = parent.parent
         return {"root": preview["root"], "moved": len(done)}
 
     def disk_undo(self, drop_id: str) -> dict[str, Any]:

@@ -142,6 +142,8 @@ def test_disk_organization_preview_apply_undo(container, tmp_path):
     assert (root / "docs" / "architecture.md").exists()  # preview moves nothing
     container.drops.disk_apply(drop["id"])
     assert (root / "Design" / "architecture.md").exists() and not (root / "docs" / "architecture.md").exists()
+    assert not (root / "meetings").exists()  # emptied by the moves: removed
+    assert (root / "node_modules").exists()
     assert (root / "node_modules" / "x" / "index.js").exists()  # junk is never touched
     undo = container.drops.disk_undo(drop["id"])
     assert undo["left"] == 0 and (root / "docs" / "architecture.md").exists() and not (root / "Design").exists()

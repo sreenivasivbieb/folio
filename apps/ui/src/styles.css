@@ -550,3 +550,69 @@ textarea.schema { width: 100%; min-height: 46vh; font-family: var(--mono); font-
 .file-name { font-size: 11px; color: var(--text-3); }
 .file-labels-title { margin: 6px 0 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--text); }
 .tag-chip.more { background: transparent; border-style: dashed; color: var(--text-3); }
+
+/* ---- Drop & Label ---------------------------------------------------------------------------- */
+.main > .drop-view { padding: 28px 24px 40px; }
+.drop-hero { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; margin: 0 auto; max-width: 760px; }
+.drop-title { margin: 4px 0 0; font-size: 34px; font-weight: 350; letter-spacing: -0.04em; line-height: 1.1; }
+.drop-title b { font-weight: 650; }
+.drop-sub { margin: 0; max-width: 560px; color: var(--text-2); font-size: 14px; line-height: 1.55; }
+.drop-target { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 34px 20px; margin-top: 6px;
+  border-radius: 22px; border: 1.5px dashed var(--border-strong); color: var(--violet);
+  background: radial-gradient(60% 80% at 50% 0%, var(--violet-soft), transparent 70%), var(--surface); }
+.drop-target b { color: var(--text); font-size: 15px; font-weight: 600; }
+.drop-target.has-files { padding: 18px 20px; }
+.drop-card, .label-card, .result-card { width: 100%; text-align: left; padding: 18px; border-radius: 20px; border: 1px solid var(--hairline);
+  background: var(--surface); box-shadow: 0 1px 2px rgb(16 16 40 / 3%), 0 12px 32px rgb(16 16 40 / 6%); }
+.chip-path { display: inline-flex; align-items: center; gap: 5px; margin: 0 6px 4px 0; padding: 2px 9px; border-radius: 999px;
+  background: var(--card); border: 1px solid var(--hairline); font-size: 12px; }
+.drop-counts { margin: 10px 0 14px; font-size: 14px; }
+.label-card { display: flex; flex-direction: column; gap: 12px; }
+.label-input { width: 100%; resize: vertical; min-height: 84px; border: 0; outline: none; background: transparent; font: inherit;
+  font-size: 16px; line-height: 1.5; color: var(--text); }
+.label-input::placeholder { color: var(--text-3); }
+.talk { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; border-radius: 999px; cursor: pointer; user-select: none;
+  border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font-weight: 500; touch-action: none; }
+.talk:disabled { opacity: 0.45; cursor: default; }
+.talk.recording { background: var(--pink); border-color: var(--pink); color: white; animation: pulse 1.2s infinite; }
+.drop-files { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 3px; max-height: 220px; overflow: auto;
+  padding: 10px 14px; border-radius: 14px; background: var(--card); border: 1px solid var(--hairline); color: var(--text-2); }
+.result-title { margin: 6px 0 8px; font-size: 26px; font-weight: 600; letter-spacing: -0.035em; }
+.result-label { margin: 0 0 10px; padding: 10px 14px; border-left: 3px solid var(--violet); border-radius: 0 12px 12px 0;
+  background: var(--violet-soft); color: var(--text); font-size: 14px; }
+.result-summary { margin: 0 0 10px; color: var(--text-2); line-height: 1.55; }
+.result-folders { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-top: 10px; }
+.result-folder { display: flex; flex-direction: column; gap: 3px; padding: 12px; border-radius: 14px; background: var(--card); border: 1px solid var(--hairline); min-width: 0; }
+.recent-drops { max-width: 980px; margin: 36px auto 0; }
+.recent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.recent-card { display: flex; flex-direction: column; gap: 4px; padding: 13px 14px; border-radius: 16px; text-align: left; cursor: pointer; min-width: 0;
+  border: 1px solid var(--hairline); background: var(--surface); box-shadow: var(--shadow-sm); transition: border-color 0.15s, box-shadow 0.15s; }
+.recent-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow); }
+
+/* ---- Projects ------------------------------------------------------------------------------- */
+.main > .projects-view { display: grid; grid-template-columns: minmax(200px, 280px) minmax(0, 1fr); }
+.project-list { border-right: 1px solid var(--hairline); padding: 12px; overflow: auto; display: flex; flex-direction: column; gap: 8px; background: var(--card); }
+.project-card { display: flex; flex-direction: column; gap: 3px; padding: 12px; border-radius: 14px; text-align: left; cursor: pointer; min-width: 0;
+  border: 1px solid transparent; background: transparent; }
+.project-card:hover { background: var(--surface); }
+.project-card.active { background: var(--surface); border-color: var(--hairline); box-shadow: var(--shadow-sm); }
+.project-card-summary { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.project-detail { padding: 22px 26px; }
+.project-folders { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.project-folder { padding: 12px; border-radius: 16px; border: 1px solid var(--hairline); background: var(--card); min-width: 0; }
+.project-file { display: flex; align-items: center; gap: 7px; width: 100%; padding: 6px 8px; border: 0; border-radius: 9px; background: transparent;
+  cursor: pointer; text-align: left; font-size: 13px; min-width: 0; }
+.project-file:hover { background: var(--surface); box-shadow: var(--shadow-sm); }
+.disk-moves { max-height: 46vh; overflow: auto; display: flex; flex-direction: column; gap: 4px; }
+.disk-move { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: center; padding: 6px 8px;
+  border-radius: 9px; background: var(--card); }
+
+/* ---- graph filters --------------------------------------------------------------------------- */
+.graph-filter { max-width: 210px; }
+.graph-highlight { width: 150px; }
+@media (max-width: 1040px) {
+  .main > .projects-view { grid-template-columns: 1fr; }
+  .project-list { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--hairline); }
+  .project-card { min-width: 200px; }
+  .drop-title { font-size: 28px; }
+}

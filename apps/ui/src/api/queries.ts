@@ -347,3 +347,53 @@ export function useDropPreview(paths: string[]) {
     queryFn: async () => unwrap(await client.POST("/api/vault/preview", { body: { paths } })),
   });
 }
+
+// --- drops: drop -> label -> AI organize ----------------------------------------------------
+
+const FINAL = new Set(["organized", "failed", "imported"]);
+
+export function useDrops() {
+  const { client } = useApi();
+  return useQuery({
+    queryKey: ["drops"],
+    queryFn: async () => unwrap(await client.GET("/api/drops")),
+    refetchInterval: (q) => ((q.state.data ?? []).some((d) => !FINAL.has(d.status)) ? 1500 : false),
+  });
+}
+
+export function useDrop(id: string | null) {
+  const { client } = useApi();
+  return useQuery({
+    queryKey: ["drop", id],
+    enabled: !!id,
+    queryFn: async () => unwrap(await client.GET("/api/drops/{drop_id}", { params: { path: { drop_id: id! } } })),
+    refetchInterval: (q) => (q.state.data && FINAL.has(q.state.data.status) ? false : 1000),
+  });
+}
+
+export function useDropActions() {
+  const { client } = useApi();
+  const id = (drop_id: string) => ({ params: { path: { drop_id } } });
+  return {
+    create: useAction(async (a: { paths: string[]; mode: "move" | "copy" }) =>
+      unwrap(await client.POST("/api/drops", { body: a }))),
+    label: useAction(async (a: { id: string; text: string }) =>
+      unwrap(await client.POST("/api/drops/{drop_id}/label", { ...id(a.id), body: { label_text: a.text } }))),
+    diskPreview: useAction(async (dropId: string) =>
+      unwrap(await client.POST("/api/drops/{drop_id}/disk-organization/preview", id(dropId)))),
+    diskApply: useAction(async (dropId: string) =>
+      unwrap(await client.POST("/api/drops/{drop_id}/apply-disk-organization", id(dropId))), "Files organized on disk"),
+    diskUndo: useAction(async (dropId: string) =>
+      unwrap(await client.POST("/api/drops/{drop_id}/disk-organization/undo", id(dropId))), "Disk organization undone"),
+    voiceStart: useAction(async () => unwrap(await client.POST("/api/voice/start", { body: { target_kind: "none", target_ids: [] } }))),
+    voiceText: useAction(async () => unwrap(await client.POST("/api/voice/transcribe"))),
+  };
+}
+
+export function useEntitiesOfType(types: string[]) {
+  const { client } = useApi();
+  return useQuery({
+    queryKey: ["entities-of", types],
+    queryFn: async () => unwrap(await client.GET("/api/entities", { params: { query: { type: types, limit: 200 } } })),
+  });
+}

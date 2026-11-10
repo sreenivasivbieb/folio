@@ -8,7 +8,7 @@ import Graph from "graphology";
 import forceAtlas2 from "graphology-layout-forceatlas2";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Sigma from "sigma";
-import { useGraph, useKnowledgeActions } from "@/api/queries";
+import { useEntitiesOfType, useGraph, useKnowledgeActions } from "@/api/queries";
 import { predicateLabel } from "@/lib/format";
 import { type SchemaDef, typeColor, useSchemaDef } from "@/lib/schema";
 import { EmptyState } from "@/components/EmptyState";
@@ -78,13 +78,16 @@ export function GraphView() {
   const [neighbourhood, setNeighbourhood] = useState(false);
   const [depth, setDepth] = useState(2);
   const [mentions, setMentions] = useState(false);
-  const [rejected, setRejected] = useState(false);
+  const rejected = false; // no review step: rejected items stay hidden
   const { data, isLoading } = useGraph(neighbourhood ? focus : null, depth, mentions, rejected);
   const schema = useSchemaDef();
   const container = useRef<HTMLDivElement>(null);
   const sigma = useRef<Sigma | null>(null);
   const selectedRef = useRef<Set<string>>(new Set());
   const hoveredRef = useRef<string | null>(null);
+  const [highlight, setHighlight] = useState("");
+  const highlightRef = useRef("");
+  const { data: focusable } = useEntitiesOfType(["Project", "Person", "Organization", "Topic"]);
   const actions = useKnowledgeActions();
 
   const graph = useMemo(() => (data ? buildGraph(data, schema) : null), [data, schema]);
@@ -112,6 +115,11 @@ export function GraphView() {
       labelRenderedSizeThreshold: graph.order <= 80 ? 0 : 7, // small graphs: every node keeps its name
       stagePadding: 120, // room for labels at the edges, and nodes clear of the legend overlay
       nodeReducer: (node, attrs) => {
+        const q = highlightRef.current;
+        if (q && !String(attrs.label ?? "").toLowerCase().includes(q)) {
+          return { ...attrs, color: tint(String(attrs.color), 0.8), label: "", zIndex: 0 };
+        }
+        if (q) return { ...attrs, highlighted: true, zIndex: 2, labelColor: "#18181b" };
         if (selectedRef.current.has(node)) return { ...attrs, highlighted: true, zIndex: 1, labelColor: "#18181b" };
         if (hoveredRef.current === node) return { ...attrs, labelColor: "#18181b" };
         return attrs;
@@ -143,6 +151,18 @@ export function GraphView() {
     sigma.current?.refresh();
   }, [selection]);
 
+  useEffect(() => {
+    highlightRef.current = highlight.trim().toLowerCase();
+    sigma.current?.refresh();
+  }, [highlight]);
+
+  const focusOn = (id: string) => {
+    if (!id) return setNeighbourhood(false);
+    ui.set({ focusEntity: id });
+    setDepth(2);
+    setNeighbourhood(true);
+  };
+
   const selectedEntities = selection.kind === "entity" ? selection.ids : [];
   const selectedEdge = selection.kind === "claim" && graph?.hasEdge(selection.ids[0]) ? selection.ids[0] : null;
 
@@ -158,8 +178,20 @@ export function GraphView() {
             {[1, 2, 3].map((d) => <option key={d} value={d}>{d} hop{d > 1 ? "s" : ""}</option>)}
           </select>
         )}
+        <select className="input graph-filter" aria-label="Focus on a project, person or tag"
+          value={neighbourhood && focus ? focus : ""} onChange={(e) => focusOn(e.target.value)}>
+          <option value="">Focus on…</option>
+          {(["Project", "Person", "Organization", "Topic"] as const).map((t) => {
+            const items = (focusable ?? []).filter((e) => e.type === t);
+            return items.length ? (
+              <optgroup key={t} label={t === "Topic" ? "Tags & topics" : `${t === "Person" ? "People" : `${t}s`}`}>
+                {items.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+              </optgroup>
+            ) : null;
+          })}
+        </select>
+        <input className="input graph-highlight" placeholder="Highlight…" value={highlight} onChange={(e) => setHighlight(e.target.value)} aria-label="Highlight nodes" />
         <label className="row small text-2"><input type="checkbox" checked={mentions} onChange={(e) => setMentions(e.target.checked)} /> Show files</label>
-        <label className="row small text-2"><input type="checkbox" checked={rejected} onChange={(e) => setRejected(e.target.checked)} /> Show rejected</label>
         <span className="spacer" />
         {selectedEntities.length === 2 && <ConnectOrMerge a={selectedEntities[0]} b={selectedEntities[1]} graph={graph} />}
         <span className="small muted">{data ? `${data.nodes.length} entities · ${data.edges.length} links` : ""}</span>
@@ -170,7 +202,7 @@ export function GraphView() {
         {data && data.nodes.length === 0 && (
           <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
             <EmptyState icon="graph" title={<>Your knowledge <b>graph</b></>}>
-              People, topics and organisations appear here as bubbles once facts are extracted — connect an AI model in Settings, or select a file and describe it below.
+              Drop files and label them: projects, folders, people and topics appear here, linked.
             </EmptyState>
           </div>
         )}
@@ -190,7 +222,7 @@ export function GraphView() {
           {Array.from(new Set(data.nodes.map((n) => n.type))).sort().map((t) => (
             <span key={t} className="row"><span className="dot" style={{ background: typeColor(schema, t) }} />{t}</span>
           ))}
-          <span className="muted">bold = confirmed · light = awaiting review</span>
+          <span className="muted">click a node to see its files</span>
         </div>}
       </div>
     </div>

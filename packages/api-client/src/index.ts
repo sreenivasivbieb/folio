@@ -32,6 +32,8 @@ export type SchemaView = S["SchemaView"];
 export type HistoryEntry = S["HistoryEntry"];
 export type GroupEntry = S["GroupEntry"];
 export type EntityNode = S["EntityNode"];
+export type Drop = S["Drop"];
+export type DiskPreview = S["DiskPreview"];
 
 export interface Connection {
   baseUrl: string;
