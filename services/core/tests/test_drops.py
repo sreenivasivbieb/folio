@@ -253,3 +253,28 @@ def test_people_named_in_the_label_survive_a_terse_model(container, tmp_path):
     plan = container.drops.get(drop["id"])["plan"]
     assert {(e["name"], e["type"]) for e in plan["entities"]} == {("Rahul", "Person")}
     assert plan["tags"]  # label keywords when the model gave none
+
+
+def test_backups_keep_drops_and_projects(container, tmp_path):
+    from .conftest import make_container
+
+    drop = _drop(container, tmp_path)
+    container.drops.set_label(drop["id"], LABEL)
+    drain(container)
+    backup = container.exporter.to_json()
+    assert [d["_id"] for d in backup["drops"]] == [drop["id"]]
+    fresh = make_container(tmp_path / "restored")
+    fresh.exporter.from_json(backup)
+    restored = fresh.drops.get(drop["id"])
+    assert restored["label"] == LABEL and restored["project"]["name"] == "Pune Solar Project"
+
+
+def test_undone_organizing_asks_for_a_label_again(container, tmp_path):
+    drop = _drop(container, tmp_path)
+    container.drops.set_label(drop["id"], LABEL)
+    drain(container)
+    container.ledger.undo()
+    again = container.drops.get(drop["id"])
+    assert again["status"] == "imported" and again["project"] is None
+    container.ledger.redo()
+    assert container.drops.get(drop["id"])["status"] == "organized"

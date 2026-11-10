@@ -153,8 +153,11 @@ class DropService:
                           "status": src.status.value if src else "missing",
                           "folder": folder_of.get(f["rel_path"])})
         project = repo.get_entity(self.kdb, d["project_id"]) if d.get("project_id") else None
+        status = d["status"]
+        if status == "organized" and (project is None or project.status.value in ("merged", "rejected")):
+            status, project = "imported", None  # organizing was undone (Ctrl+Z): label it again
         return {
-            "id": d["_id"], "status": d["status"], "mode": d["mode"], "paths": d["paths"],
+            "id": d["_id"], "status": status, "mode": d["mode"], "paths": d["paths"],
             "file_count": d.get("file_count", 0), "skipped": d.get("skipped", 0), "label": d.get("label"),
             "error": d.get("error"), "engine": d.get("engine"), "created_at": d["created_at"],
             "project": {"id": project.id, "name": project.name} if project else None,

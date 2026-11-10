@@ -44,8 +44,10 @@ Google Drive backup uses your own Google account and OAuth credentials.
 - **Search everything** (`/` or Ctrl+K): your labels and project summaries first, then
   project, tag and file names (typos and partial words are fine), then exact passages
   with page numbers, lines or audio/video timestamps.
-- **Keep portable backups:** export JSON, GraphML, Markdown or CSV, and restore Folio
-  JSON backups into an empty project.
+- **Keep portable backups:** export JSON (including drops and projects), GraphML,
+  Markdown or CSV, and restore Folio JSON backups into an empty project.
+- **Keyboard first:** `1` `2` `3` switch between Drop & Label, Projects and Graph; `/`
+  searches; Ctrl+Space (held) records a voice label; Ctrl+Z / Ctrl+Shift+Z undo and redo.
 
 ## Install
 
@@ -55,7 +57,7 @@ Google Drive backup uses your own Google account and OAuth credentials.
 | Linux x86_64, any distro | `Folio_x.y.z_amd64.AppImage` (`chmod +x`, then run) | Release workflow |
 | Debian / Ubuntu | `Folio_x.y.z_amd64.deb` (`sudo apt install ./Folio_*.deb`) | Release workflow |
 | Fedora / openSUSE | `Folio-x.y.z-1.x86_64.rpm` (`sudo dnf install ./Folio-*.rpm`) | Release workflow |
-| Omarchy / Arch | `folio-x.y.z-1-x86_64.pkg.tar.zst` | `scripts/build-omarchy.sh` (below) |
+| Omarchy / Arch | `folio-desktop-x.y.z-1-x86_64.pkg.tar.zst` | `scripts/build-omarchy.sh` (below) |
 
 Every installer bundles the core service, speech recognition, audio/video decoding and
 microphone support — no Python, ffmpeg or other runtime to install. Windows uses the
@@ -167,8 +169,8 @@ ffmpeg needed.
 **Folio has no developer-operated storage service, shared database or required Folio
 account.** Each operating-system user has their own local app data.
 
-On Linux, the default folder is `~/.local/share/folio/`, or `$XDG_DATA_HOME/folio/`
-when `XDG_DATA_HOME` is set:
+The default folder is `~/.local/share/folio/` on Linux (or `$XDG_DATA_HOME/folio/` when
+`XDG_DATA_HOME` is set) and `%APPDATA%\folio\` on Windows:
 
 | Local file or folder | Contents |
 | --- | --- |
@@ -238,13 +240,14 @@ Cloud project, OAuth client and Google account**.
 
 Folio uses a local callback, PKCE and Google's `drive.file` scope for its backups;
 see [Google's scope documentation](https://developers.google.com/workspace/drive/api/guides/api-specific-auth).
-Uploads are manual. A backup includes knowledge, evidence quotes, local source paths,
-settings and history. Original documents, recorded audio, API keys and OAuth tokens
-are excluded.
+Uploads are manual. A backup includes drops and their labels, projects, knowledge,
+evidence quotes, local source paths, settings and history. The files themselves (including
+those in Folio's `vault/`), recorded audio, API keys and OAuth tokens are excluded — copy
+the `vault/` folder separately if you want the files too.
 
 Use the same OAuth client on another device to access its backups. **Restore locally**
-requires an empty local project; source documents must be available separately to
-reopen them. **Disconnect locally** removes this device's Drive credentials.
+requires an empty local project; put the `vault/` folder back (or the original files)
+to reopen documents. **Disconnect locally** removes this device's Drive credentials.
 Google account permissions can also be revoked in your Google account.
 
 For a local backup, use **Settings → Data** to export JSON and restore it into an empty
@@ -298,7 +301,7 @@ it measures the rule extractor on those fixtures, rather than live AI model qual
 | --- | --- |
 | [`apps/ui`](apps/ui) | React and TypeScript interface |
 | [`apps/desktop`](apps/desktop) | Tauri shell, native dialogs and core supervision |
-| [`services/core`](services/core) | Python ingestion, local persistence, search, ledger and providers |
+| [`services/core`](services/core) | Python core: drops and AI organizing, ingestion, local persistence, search, ledger and providers |
 | [`packages/api-client`](packages/api-client) | Generated OpenAPI types and typed HTTP client |
 | [`pkgbuild`](pkgbuild) | Arch package metadata and desktop entry |
 | [`scripts/build-omarchy.sh`](scripts/build-omarchy.sh) | Omarchy package and portable archive builder |
@@ -317,7 +320,8 @@ it measures the rule extractor on those fixtures, rather than live AI model qual
 | Images or scanned PDFs have no extracted text | Check Tesseract and its English language data |
 | Audio/video has no transcript | Connect Groq/OpenAI or download the speech model (Settings → Voice); videos without an audio track are kept without one |
 | Voice: nothing happens on Wayland | Apps can't grab global keys there: bind a desktop shortcut to `folio-core voice toggle` (Settings → Voice) |
-| Voice: a name is misheard | Click **Edit** in the label preview, fix the text, **Re-check** |
+| Voice: a name is misheard | On the Drop screen, just edit the label box before **Organize with AI**; elsewhere, click **Edit** in the label preview and **Re-check** |
+| A project disappeared after Ctrl+Z | Undo also reverts organizing; the drop asks for its label again (or press Ctrl+Shift+Z) |
 | AI connection fails | Check the local server or hosted provider URL, model and your API key; use **Test** |
 | Drive restore is unavailable | Restore into an empty project using the OAuth client that created the backup |
 

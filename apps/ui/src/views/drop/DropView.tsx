@@ -98,6 +98,19 @@ function LabelCard({ dropId }: { dropId: string }) {
     });
   };
   const organize = () => text.trim() && a.label.mutate({ id: dropId, text: text.trim() });
+
+  // Hold Ctrl+Space anywhere on this screen to speak the label (same as the button).
+  const talk = useRef({ startTalk, stopTalk });
+  talk.current = { startTalk, stopTalk };
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.code === "Space" && !e.repeat) { e.preventDefault(); talk.current.startTalk(); }
+    };
+    const up = (e: KeyboardEvent) => { if (e.code === "Space" || e.key === "Control") talk.current.stopTalk(); };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
+  }, []);
   if (!drop) return <section className="drop-hero"><Icon name="loader" spin /></section>;
   const busy = drop.status === "organizing" || (drop.status === "importing" && !!drop.label);
 
@@ -118,7 +131,7 @@ function LabelCard({ dropId }: { dropId: string }) {
             <div className="row" style={{ justifyContent: "space-between" }}>
               <button type="button" className={`talk ${recording ? "recording" : ""}`} disabled={!canSpeak || busy || a.voiceText.isPending}
                 onPointerDown={startTalk} onPointerUp={stopTalk} onPointerLeave={stopTalk}
-                title={canSpeak ? "Hold and speak — English, Hindi or Hinglish" : "Set up voice in Settings → Voice"}>
+                title={canSpeak ? "Hold (or hold Ctrl+Space) and speak — English, Hindi or Hinglish" : "Set up voice in Settings → Voice"}>
                 {a.voiceText.isPending ? <Icon name="loader" spin /> : <Icon name="mic" />}
                 {recording ? "Listening… release to stop" : a.voiceText.isPending ? "Transcribing…" : "Hold to speak"}
               </button>

@@ -17,7 +17,7 @@ from ..store.local import KnowledgeDB, WriteConflict
 
 FORMAT = "folio.v2"
 DURABLE = ["settings", "schema_versions", "roots", "sources", "entities", "claims", "labels",
-           "event_groups", "events"]
+           "drops", "event_groups", "events"]  # drops: the Projects view (label, plan, folders)
 LEDGER = ("event_groups", "events")
 GRAPHML_NS = "http://graphml.graphdrawing.org/xmlns"
 NODE_KEYS = ["type", "name", "status", "aliases", "entity_json"]
