@@ -1,6 +1,5 @@
 """Regression tests for destructive failure paths, scanning, and resumable work."""
 
-import sys
 from copy import deepcopy
 from pathlib import Path
 
