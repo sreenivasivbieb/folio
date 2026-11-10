@@ -23,11 +23,20 @@ points back to the file and line it came from.
 - **Nothing is final.** You can re-label any drop, and Ctrl+Z undoes any action,
   including organizing.
 
-**Contents:** [Tour](#a-tour-of-folio) · [Shortcuts](#keyboard-shortcuts) ·
+## Watch the demo
+
+[![Folio launch video: watch the 90-second demo](docs/media/folio-launch-poster.png)](docs/media/folio-launch.mp4)
+
+A 90-second walkthrough of dropping a folder, labelling it, the organized project, the
+graph, search and the evidence viewer. Click the image to play it, or
+[download the MP4](docs/media/folio-launch.mp4?raw=true).
+
+**Contents:** [Demo](#watch-the-demo) · [Tour](#a-tour-of-folio) · [Shortcuts](#keyboard-shortcuts) ·
 [Install](#install) · [First drop](#your-first-drop) · [Supported files](#supported-files) ·
 [Data &amp; privacy](#your-data-and-privacy) · [AI &amp; voice](#choose-your-ai-and-voice) ·
 [Backups](#backups-and-exports) · [How it works](#how-it-works) ·
-[Development](#development) · [Troubleshooting](#troubleshooting-and-current-limits)
+[Development](#development) · [Troubleshooting](#troubleshooting-and-current-limits) ·
+[Team](#team)
 
 ---
 
@@ -478,3 +487,13 @@ against a real hosted model (Groq). CI runs the core tests on Linux and Windows 
 builds the desktop shell on Linux, macOS and Windows. Still to be checked by hand on real
 installs: live Google sign-in, native drag-and-drop in the desktop window, native Wayland
 interaction, and microphone/WebView2 on Windows.
+
+## Team
+
+Folio is built by:
+
+- **Vishal Agrawal**
+- **Sreenivas Tatuskar**
+
+If Folio is useful to you, please ⭐ **star the repository**. It helps others find it.
+Issues and pull requests are welcome.
