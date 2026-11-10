@@ -103,13 +103,14 @@ class JobQueue:
             )
         self._publish(job_id)
 
-    def fail(self, job_id: str, error: str) -> None:
-        """Retry while attempts remain; otherwise mark failed with the cause (shown in the UI)."""
+    def fail(self, job_id: str, error: str, permanent: bool = False) -> None:
+        """Retry while attempts remain (unless ``permanent``); otherwise mark failed with the
+        cause (shown in the UI)."""
         with self.db.write() as conn:
             conn.execute(
-                "UPDATE jobs SET status = CASE WHEN attempts < max_attempts THEN 'queued' "
+                "UPDATE jobs SET status = CASE WHEN ? = 0 AND attempts < max_attempts THEN 'queued' "
                 "ELSE 'failed' END, error = ?, updated_at = ? WHERE id = ?",
-                (error[-4000:], utcnow(), job_id),
+                (int(permanent), error[-4000:], utcnow(), job_id),
             )
         self._publish(job_id)
 
@@ -136,7 +137,8 @@ class JobQueue:
         """Re-queue jobs interrupted by a crash or forced kill (NFR: reliability)."""
         with self.db.write() as conn:
             cur = conn.execute(
-                "UPDATE jobs SET status = 'queued', updated_at = ? WHERE status = 'running'",
+                "UPDATE jobs SET status = 'queued', attempts = MAX(attempts - 1, 0), updated_at = ? "
+                "WHERE status = 'running'",  # the interrupted attempt does not count
                 (utcnow(),),
             )
         return cur.rowcount
@@ -159,12 +161,6 @@ class JobQueue:
     def counts(self) -> dict[str, int]:
         rows = self.db.reader().execute("SELECT status, COUNT(*) FROM jobs GROUP BY status")
         return {r[0]: r[1] for r in rows}
-
-    def pending(self) -> int:
-        r = self.db.reader().execute(
-            "SELECT COUNT(*) FROM jobs WHERE status IN ('queued', 'running')"
-        ).fetchone()
-        return int(r[0])
 
     def _publish(self, job_id: str) -> None:
         job = self.get(job_id)

@@ -60,8 +60,7 @@ class CloudWhisper:
         delay = 3.0
         for attempt in range(self.attempts):
             try:
-                resp = client._client.post(f"{client.base_url}/{path}", data=form,
-                                           files={"file": ("audio.wav", data, "audio/wav")})
+                resp = client.post_form(path, form, {"file": ("audio.wav", data, "audio/wav")})
             except Exception as exc:
                 if attempt == self.attempts - 1:
                     raise Unavailable(f"could not reach the speech service: {exc}") from exc
@@ -75,7 +74,7 @@ class CloudWhisper:
                 delay *= 2
                 continue
             return resp
-        return resp
+        raise Unavailable("the speech service did not answer")  # only when attempts == 0
 
     def __init__(self, llm: Any) -> None:  # ConfiguredLLM
         self.llm = llm

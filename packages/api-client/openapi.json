@@ -4924,6 +4924,20 @@
               }
             ],
             "title": "Disk"
+          },
+          "import_stats": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Import Stats"
           }
         },
         "type": "object",

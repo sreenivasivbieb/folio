@@ -14,8 +14,6 @@ import re
 import unicodedata
 from typing import Any
 
-from .models import ClaimStatus
-
 _WS = re.compile(r"\s+")
 _PUNCT = re.compile(r"[^\w\s@.\-]")
 
@@ -48,11 +46,6 @@ def claim_fingerprint(
         [subject_key, predicate.lower(), object_key or "", normalize_value(value) if object_key is None else ""]
     )
     return hashlib.sha256(payload.encode()).hexdigest()[:32]
-
-
-def extraction_may_write(existing_status: ClaimStatus | None) -> bool:
-    """Re-extraction may only create a claim that does not exist or is still just proposed."""
-    return existing_status in (None, ClaimStatus.PROPOSED)
 
 
 def requires_evidence(extractor_kind: str) -> bool:

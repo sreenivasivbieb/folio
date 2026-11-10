@@ -15,7 +15,7 @@ import logging
 import sqlite3
 import threading
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from datetime import UTC, datetime
 from importlib import resources
 from pathlib import Path
@@ -58,6 +58,7 @@ class IndexDB:
         self._write_lock = threading.RLock()
         self._local = threading.local()
         self._generation = 0  # bumped by reset() so per-thread readers reconnect
+        self._readers: list[sqlite3.Connection] = []
         self._writer = self._connect()
         self.has_vec = _load_vec(self._writer)
         self._migrate()
@@ -77,10 +78,13 @@ class IndexDB:
         if cached is None or cached[0] != self._generation:
             if cached is not None:
                 cached[1].close()
+                with suppress(ValueError):
+                    self._readers.remove(cached[1])
             conn = self._connect()
             if self.has_vec:
                 _load_vec(conn)
             self._local.conn = (self._generation, conn)
+            self._readers.append(conn)
             return conn
         return cached[1]
 
@@ -97,7 +101,8 @@ class IndexDB:
                 yield conn
                 conn.execute("COMMIT")
             except BaseException:
-                conn.execute("ROLLBACK")
+                if conn.in_transaction:  # a failed COMMIT may already have ended it
+                    conn.execute("ROLLBACK")
                 raise
 
     def _migrate(self) -> None:
@@ -128,8 +133,15 @@ class IndexDB:
                           "merge_suggestions", "meta"):
                 conn.execute(f"DELETE FROM {table}")
             conn.execute("INSERT INTO chunks_fts(chunks_fts) VALUES ('rebuild')")
-            conn.execute("DROP TABLE IF EXISTS chunk_vec")
+            # Empty the vector table but keep it: indexing writes to it right away.
+            for table in ("chunk_vec",):
+                if conn.execute("SELECT 1 FROM sqlite_master WHERE name = ?", (table,)).fetchone():
+                    conn.execute(f"DELETE FROM {table}")
         self._generation += 1
 
     def close(self) -> None:
+        for conn in self._readers:  # every per-thread reader, not just the writer
+            with suppress(sqlite3.Error):
+                conn.close()
+        self._readers.clear()
         self._writer.close()

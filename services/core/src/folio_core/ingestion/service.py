@@ -45,6 +45,7 @@ from .sandbox import run_sandboxed
 
 log = logging.getLogger(__name__)
 
+AUTO_ORGANIZED = ("organize-v1", "drop-organize-v1")  # facts the organizers applied automatically
 PRIORITY_SELECTED_FILE = 10  # "selected files first" (risk: slow indexing of long videos)
 PRIORITY_WATCH_CHANGE = 5
 PRIORITY_FOLDER_SCAN = 0
@@ -220,7 +221,8 @@ class IngestionService:
         root = repo.root_from_doc(doc)
         queued = self.scan_root(root, job)
         progress = self.queue.get(job.id)
-        return "Scan complete: " + (progress.message or f"{queued} file(s) queued for content indexing")
+        message = progress.message if progress is not None else None
+        return "Scan complete: " + (message or f"{queued} file(s) queued for content indexing")
 
     def _root_for(self, path: Path) -> Root | None:
         """The most specific tracked root containing ``path`` (roots may be nested)."""
@@ -461,12 +463,18 @@ class IngestionService:
                 stats["evidence_removed"] += len(c["evidence"]) - len(kept)
                 if kept:
                     tx.update("claims", c["id"], {"evidence": kept})
-                elif c["status"] == ClaimStatus.VERIFIED:
+                elif c["status"] == ClaimStatus.VERIFIED and (c.get("extractor") or {}).get("prompt_version") not in AUTO_ORGANIZED:
+                    # The user stated or confirmed it: keep it, flagged for review. (Organizing
+                    # applies its facts automatically; those simply go with the file.)
                     tx.update("claims", c["id"], {"evidence": kept, "needs_review": True})
                     stats["claims_flagged"] += 1
                 else:
                     tx.delete("claims", c["id"])
                     stats["claims_removed"] += 1
+            # The link "this entity is that file" goes with the file.
+            for c in tx.find("claims", {"predicate": "represented_by", "value": source_id}):
+                tx.delete("claims", c["id"])
+                stats["claims_removed"] += 1
         self._drop_chunks(source_id)
         repo.set_source_status(self.kdb, source_id, SourceStatus.FORGOTTEN, indexed_hash=None)
         self._changed(source_id)

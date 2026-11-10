@@ -43,10 +43,6 @@ def types_in_use(kdb: KnowledgeDB) -> list[str]:
     return sorted(t for t in kdb["entities"].distinct("type", {"status": {"$nin": ["merged", "rejected"]}}) if t)
 
 
-def predicates_in_use(kdb: KnowledgeDB) -> list[str]:
-    return sorted(p for p in kdb["claims"].distinct("predicate", {"status": {"$ne": "rejected"}}) if p)
-
-
 # --- roots & sources ------------------------------------------------------------------------
 
 
@@ -226,10 +222,6 @@ def get_claim(kdb: KnowledgeDB, claim_id: str) -> Claim | None:
     return claim_from_doc(d) if d else None
 
 
-def claims_by_fingerprint(kdb: KnowledgeDB, fingerprint: str, session: ClientSession | None = None) -> list[dict[str, Any]]:
-    return list(kdb["claims"].find({"fingerprint": fingerprint}, session=session))
-
-
 def claims_for_entity(kdb: KnowledgeDB, entity_id: str, include_rejected: bool = True) -> list[Claim]:
     query: dict[str, Any] = {"$or": [{"subject_id": entity_id}, {"object_id": entity_id}]}
     if not include_rejected:
@@ -391,7 +383,7 @@ def files_tagged(kdb: KnowledgeDB, tag_id: str) -> list[str]:
     (project -> folder -> file), or the file's own entity is the tag."""
     tag_id = resolve_merged(kdb, tag_id)
     members, frontier = {tag_id}, {tag_id}
-    for _ in range(2):
+    for _ in range(3):  # topic -> project -> folder -> file
         nxt = {c["subject_id"] for c in kdb["claims"].find({"object_id": {"$in": list(frontier)},
                                                             "status": {"$ne": "rejected"},
                                                             "predicate": {"$in": list(ORGANIZING)}}) if _organizes(c)}
@@ -415,9 +407,17 @@ def top_tags(kdb: KnowledgeDB, limit: int = 14) -> list[dict[str, Any]]:
         if c.get("object_id") and _organizes(c):
             links.setdefault(c["subject_id"], []).append(c["object_id"])
     _add_parent_projects(kdb, links)
+    # A project's topics (project --about--> topic) are tags of every file in the project.
+    projects = list({o for objs in links.values() for o in objs})
+    topics: dict[str, list[str]] = {}
+    for c in kdb["claims"].find({"subject_id": {"$in": projects}, "predicate": {"$in": list(ORGANIZING)},
+                                 "status": {"$ne": "rejected"}}):
+        if c.get("object_id") and _organizes(c) and c["predicate"] != "part_of":
+            topics.setdefault(c["subject_id"], []).append(c["object_id"])
     for doc, objs in links.items():
-        for o in objs:
-            counts.setdefault(o, set()).add(file_ents[doc])
+        inherited = [t for parent in objs for t in topics.get(parent, [])]
+        for tag in objs + inherited:
+            counts.setdefault(tag, set()).add(file_ents[doc])
     ents = get_entities(kdb, list(counts))
     ranked = sorted((e for e in ents.values() if e.status.value not in ("merged", "rejected") and e.type != "Document"),
                     key=lambda e: (-len(counts[e.id]), e.name.lower()))

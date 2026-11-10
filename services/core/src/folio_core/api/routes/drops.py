@@ -50,6 +50,8 @@ class Drop(BaseModel):
     plan: dict[str, Any] | None = None
     files: list[DropFile] = Field(default_factory=list)
     disk: dict[str, Any] | None = None
+    # imported / duplicates / failed / skipped counts once the import finished
+    import_stats: dict[str, int] | None = None
 
 
 class DiskMove(BaseModel):

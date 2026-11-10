@@ -1754,6 +1754,10 @@ export interface components {
             disk?: {
                 [key: string]: unknown;
             } | null;
+            /** Import Stats */
+            import_stats?: {
+                [key: string]: number;
+            } | null;
         };
         /** DropBody */
         DropBody: {

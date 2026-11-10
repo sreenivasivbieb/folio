@@ -18,8 +18,10 @@ class FakeLLM:
     is_local = True
 
     def __init__(self, responses: list[str | dict[str, Any]] | Responder | None = None,
-                 model_id: str = "fake-llm") -> None:
+                 model_id: str = "fake-llm", configured: bool = False) -> None:
         self.model_id = model_id
+        # Consumers gate on ``configured`` (like ConfiguredLLM): pass True to exercise model paths.
+        self.configured = configured
         self._responses = responses
         self.calls: list[tuple[str, str]] = []
 

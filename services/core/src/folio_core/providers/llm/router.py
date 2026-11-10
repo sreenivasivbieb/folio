@@ -75,11 +75,16 @@ class ConfiguredLLM:
         if cfg is None or not cfg.base_url or not cfg.model:
             return None
         key = self.secrets.get(key_name(cfg.provider))
+        if cfg.provider in PRESETS and PRESETS[cfg.provider].needs_key and not key:
+            return None  # e.g. the key was removed: not usable, so the offline rules take over
         ident = (cfg.base_url, cfg.model, key)
         with self._lock:
             if self._cache is None or self._cache[0] != ident:
                 label = PRESETS[cfg.provider].label.split(" ")[0].lower() if cfg.provider in PRESETS else "custom"
+                old = self._cache[1] if self._cache else None
                 self._cache = (ident, OpenAICompatibleLLM(cfg.base_url, cfg.model, key, label=label))
+                if old is not None:
+                    old.close()  # do not leak the previous HTTP connection pool
             return self._cache[1]
 
     @property

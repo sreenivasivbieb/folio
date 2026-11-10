@@ -97,10 +97,12 @@ def put_llm(body: LLMSettingsBody, c: C) -> LLMSettingsView:
         raise InvalidInput("base URL must start with http:// or https://")
     if not body.model.strip():
         raise InvalidInput("choose a model")
-    if body.api_key is not None:
-        c.secrets.set(key_name(body.provider), body.api_key.strip() or None)
-    if PRESETS[body.provider].needs_key and not c.secrets.get(key_name(body.provider)):
+    new_key = body.api_key.strip() if body.api_key is not None else None
+    effective = (new_key or None) if body.api_key is not None else c.secrets.get(key_name(body.provider))
+    if PRESETS[body.provider].needs_key and not effective:  # validate before changing anything
         raise InvalidInput(f"{PRESETS[body.provider].label} needs an API key")
+    if body.api_key is not None:
+        c.secrets.set(key_name(body.provider), new_key or None)
     cloud = not is_loopback(body.base_url)
     with c.ledger.group("user", "settings.llm", f"{body.provider}: {body.model}") as tx:
         tx.upsert("settings", {"id": "llm.config", "value": {

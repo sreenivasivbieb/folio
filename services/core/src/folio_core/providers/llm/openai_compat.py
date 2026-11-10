@@ -71,6 +71,13 @@ class OpenAICompatibleLLM:
                 continue
             return resp
 
+    def post_form(self, path: str, data: dict[str, str], files: dict[str, Any]) -> httpx.Response:
+        """Multipart POST to ``<base_url>/<path>`` with this provider's auth (speech APIs)."""
+        return self._client.post(f"{self.base_url}/{path}", data=data, files=files)
+
+    def close(self) -> None:
+        self._client.close()
+
     @staticmethod
     def _error(resp: httpx.Response) -> str:
         try:
@@ -125,7 +132,7 @@ class OpenAICompatibleLLM:
         if not resp.is_success:
             self._raise(resp)
         data = resp.json()
-        items = data.get("data", data if isinstance(data, list) else [])
+        items = data if isinstance(data, list) else data.get("data", []) if isinstance(data, dict) else []
         return sorted({m["id"] for m in items if isinstance(m, dict) and "id" in m})
 
     def ping(self) -> str:

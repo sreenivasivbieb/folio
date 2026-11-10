@@ -170,7 +170,10 @@ class Ledger:
                 current = tx.get(coll, doc_id)
                 later = Conflict(f"{coll} {doc_id} changed after this action; undo later changes first")
                 if ev["op"] == "insert":
-                    if current != after:
+                    def same(a: dict | None, b: dict | None) -> bool:
+                        strip = lambda d: {k: v for k, v in (d or {}).items() if k != "updated_at"}  # noqa: E731
+                        return a is not None and b is not None and strip(a) == strip(b)
+                    if not same(current, after):
                         raise later
                     tx.delete(coll, doc_id)
                 elif ev["op"] == "update":

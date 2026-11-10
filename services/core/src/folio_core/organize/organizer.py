@@ -123,7 +123,8 @@ class FileOrganizer:
         first = chunks[0] if chunks else None
         quote = (first.text[:200] if first else name) or name
         evidence = [{"source_id": src.id, "chunk_id": first.id if first else None,
-                     "locator": first.locator.model_dump(exclude_none=True) if first else {"kind": "file"},
+                     "locator": first.locator.model_dump(exclude_none=True) if first
+                     else {"kind": "text", "line_start": 1, "line_end": 1},  # no text: cite the file itself
                      "quote": quote}]
         tags = _clean_tags(out.tags)
         if (self.kdb["sources"].find_one({"_id": src.id}, {"drop_id": 1}) or {}).get("drop_id"):

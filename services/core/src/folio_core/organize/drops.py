@@ -17,7 +17,6 @@ import logging
 import re
 import shutil
 import threading
-import time
 from collections import OrderedDict
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
@@ -121,6 +120,11 @@ class DropService:
         self.kdb["drops"].update_one({"_id": drop_id}, {"$set": {
             "files": stats.get("records", []), "status": status, "updated_at": utcnow(),
             "import_stats": {k: stats.get(k, 0) for k in ("imported", "duplicates", "failed", "skipped")}}})
+        # Labelled while importing (re-read: the label may have arrived during this step):
+        # organize now that the files are in.
+        if (self.kdb["drops"].find_one({"_id": drop_id}) or {}).get("label"):
+            self.kdb["drops"].update_one({"_id": drop_id}, {"$set": {"status": "organizing"}})
+            self.queue.enqueue("organize_drop", {"drop_id": drop_id}, dedupe_key=f"organize-drop:{drop_id}", priority=25)
 
     def set_label(self, drop_id: str, label: str) -> dict[str, Any]:
         label = " ".join((label or "").split())
@@ -130,7 +134,8 @@ class DropService:
         status = "organizing" if drop["status"] != "importing" else "importing"
         self.kdb["drops"].update_one({"_id": drop_id}, {"$set": {"label": label, "status": status,
                                                                  "error": None, "updated_at": utcnow()}})
-        self.queue.enqueue("organize_drop", {"drop_id": drop_id}, dedupe_key=f"organize-drop:{drop_id}", priority=25)
+        if status != "importing":  # otherwise attach_import queues it when the files are in
+            self.queue.enqueue("organize_drop", {"drop_id": drop_id}, dedupe_key=f"organize-drop:{drop_id}", priority=25)
         return self.get(drop_id)
 
     # --- read ---------------------------------------------------------------------------------
@@ -162,7 +167,7 @@ class DropService:
             "error": d.get("error"), "engine": d.get("engine"), "created_at": d["created_at"],
             "project": {"id": project.id, "name": project.name} if project else None,
             "plan": {k: v for k, v in (d.get("plan") or {}).items() if k != "assignments"} or None,
-            "files": files, "disk": d.get("disk"),
+            "files": files, "disk": d.get("disk"), "import_stats": d.get("import_stats"),
         }
 
     def list(self, limit: int = 50) -> list[dict[str, Any]]:
@@ -172,9 +177,8 @@ class DropService:
 
     def organize_job(self, job: Any) -> str:
         drop_id = job.payload["drop_id"]
-        deadline = time.monotonic() + 600
-        while self._drop(drop_id)["status"] == "importing" and time.monotonic() < deadline:
-            time.sleep(0.5)  # the import runs on its own worker; the label can arrive first
+        if self._drop(drop_id)["status"] == "importing":
+            return "waiting for the import to finish (organizing is queued again when it does)"
         try:
             return self.organize(drop_id)
         except Exception as exc:
@@ -236,8 +240,29 @@ class DropService:
 
     # --- write the plan into the graph ---------------------------------------------------------
 
+    def _evidence(self, drop: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        """One evidence span per dropped file (its first passage; its name if it has no text), so
+        organized knowledge cites its sources and "forget this file" can remove it."""
+        out: dict[str, dict[str, Any]] = {}
+        reader = self.index.reader()
+        for f in drop.get("files", []):
+            chunks = repo.chunks_for_source(reader, f["source_id"])
+            name = PurePosixPath(f["rel_path"]).name
+            if chunks:
+                c = chunks[0]
+                out[f["rel_path"]] = {"source_id": f["source_id"], "chunk_id": c.id,
+                                      "locator": c.locator.model_dump(exclude_none=True),
+                                      "quote": " ".join(c.text.split())[:200] or name}
+            else:
+                out[f["rel_path"]] = {"source_id": f["source_id"], "chunk_id": None,
+                                      "locator": {"kind": "text", "line_start": 1, "line_end": 1}, "quote": name}
+        return out
+
     def _apply(self, drop: dict[str, Any], plan: DropPlan, engine: str) -> dict[str, Any]:
-        ai = Extractor(kind="system", model=engine, prompt_version=DROP_VERSION)
+        evidence = self._evidence(drop)
+        everything = list(evidence.values())[:20]  # project-level facts rest on the drop's files
+        # Organized facts are model output with cited sources (rules count as a model too).
+        ai = Extractor(kind="model", model=engine, prompt_version=DROP_VERSION)
         user = Extractor(kind="user")
         created: dict[str, Any] = {"claims": [], "entities": []}
         previous = drop.get("created") or {}
@@ -260,9 +285,16 @@ class DropService:
                 created["entities"].append(row["id"])
                 return row["id"]
 
-            def claim(**kw: Any) -> None:
-                cid, _ = self.knowledge.add_claim_tx(tx, status=ClaimStatus.VERIFIED, **kw)
-                if cid:
+            def claim(*, ev: list[dict[str, Any]] | None = None, **kw: Any) -> None:
+                if kw["extractor"] is ai:
+                    if not (ev or everything):
+                        kw["extractor"] = Extractor(kind="system", model=engine, prompt_version=DROP_VERSION)
+                    else:
+                        kw["evidence"] = ev or everything
+                cid, outcome = self.knowledge.add_claim_tx(tx, status=ClaimStatus.VERIFIED, **kw)
+                # Only what this drop created is its own: a fact that merged into an existing
+                # one (another drop said it too) must survive re-labeling this drop.
+                if cid and outcome == "created":
                     created["claims"].append(cid)
 
             project = entity(plan.project_name, "Project")
@@ -276,7 +308,8 @@ class DropService:
                 fid = entity(g.folder, "Folder", reuse=False)  # folders belong to this project only
                 folders[g.folder] = fid
                 names.setdefault(normalize_name(g.folder), fid)
-                claim(subject_id=fid, predicate="part_of", object_id=project, extractor=ai)
+                claim(subject_id=fid, predicate="part_of", object_id=project, extractor=ai,
+                      ev=[evidence[r] for r in g.files if r in evidence][:20])
             sources = {f["rel_path"]: f["source_id"] for f in drop.get("files", [])}
             for g in plan.virtual_folders:
                 for rel in g.files:
@@ -286,7 +319,8 @@ class DropService:
                     doc = self._document_entity(tx, sid)
                     names.setdefault(normalize_name(PurePosixPath(rel).name), doc)
                     names.setdefault(normalize_name(rel), doc)
-                    claim(subject_id=doc, predicate="part_of", object_id=folders[g.folder], extractor=ai)
+                    claim(subject_id=doc, predicate="part_of", object_id=folders[g.folder], extractor=ai,
+                          ev=[evidence[rel]] if rel in evidence else None)
             for t in plan.tags:
                 tid = entity(t, "Topic")
                 names.setdefault(normalize_name(t), tid)
@@ -294,7 +328,9 @@ class DropService:
             for e in plan.entities:
                 etype = canonical_type(e.type or "Topic", ["Person", "Organization", "Topic", "Date"])
                 if etype == "Date":
-                    claim(subject_id=project, predicate="date", value=e.name, extractor=ai)
+                    exact = re.fullmatch(r"\d{4}-\d{2}-\d{2}", e.name.strip())
+                    claim(subject_id=project, predicate="date", value=e.name, extractor=ai,
+                          valid_from=e.name.strip() if exact else None)  # shows on timelines
                     continue
                 eid = entity(e.name, etype)
                 names.setdefault(normalize_name(e.name), eid)
@@ -426,13 +462,15 @@ def normalize_plan(plan: DropPlan, rel_paths: list[str]) -> DropPlan:
     leftovers = [r for r, f in known.items() if f is None]
     if leftovers:
         folders.setdefault("Other", []).extend(leftovers)
-    if len(folders) > MAX_FOLDERS:  # fold the smallest groups into "Other"
-        keep = sorted(folders, key=lambda k: -len(folders[k]))[: MAX_FOLDERS - 1]
+    if len(folders) > MAX_FOLDERS:  # fold the smallest groups into "Other" (losing no file)
+        named = [k for k in folders if k != "Other"]
+        keep = sorted(named, key=lambda k: -len(folders[k]))[: MAX_FOLDERS - 1]
         merged: OrderedDict[str, list[str]] = OrderedDict((k, folders[k]) for k in folders if k in keep)
-        merged.setdefault("Other", [])
-        for k in folders:
-            if k not in keep and k != "Other":
-                merged["Other"].extend(folders[k])
+        other = list(folders.get("Other", []))
+        for k in named:
+            if k not in keep:
+                other.extend(folders[k])
+        merged["Other"] = other
         folders = merged
     project = " ".join(plan.project_name.split())[:80] or "Untitled drop"
     structure = {normalize_name(project)} | {normalize_name(f) for f in folders}

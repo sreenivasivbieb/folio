@@ -69,7 +69,7 @@ class WorkerPool:
     def _run(self, job: Job) -> None:
         handler = self.handlers.get(job.kind)
         if handler is None:
-            self.queue.fail(job.id, f"no handler for job kind {job.kind!r}")
+            self.queue.fail(job.id, f"no handler for job kind {job.kind!r}", permanent=True)
             return
         try:
             message = handler(job)

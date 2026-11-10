@@ -66,13 +66,15 @@ class VectorIndex:
 
     def search(self, query: np.ndarray, k: int) -> list[tuple[int, float]]:
         """Return [(chunk_rowid, similarity)] best first."""
+        if not np.any(query):  # e.g. a query of only punctuation: nothing to compare with
+            return []
         conn = self.db.reader()
         if self.db.has_vec:
             rows = conn.execute(
                 "SELECT rowid, distance FROM chunk_vec WHERE embedding MATCH ? AND k = ?",
                 (to_blob(query), k),
             ).fetchall()
-            return [(r[0], 1.0 - float(r[1])) for r in rows]
+            return [(r[0], 1.0 - float(r[1])) for r in rows if r[1] is not None]
         rows = conn.execute("SELECT chunk_rowid, vec FROM chunk_vectors").fetchall()
         if not rows:
             return []

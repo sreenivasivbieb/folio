@@ -172,7 +172,14 @@ class Vault:
                     raise
                 if folder is not None:
                     folders.add(folder)
-                self.ingestion._track(dest, root.id, PRIORITY_SELECTED_FILE)
+                try:
+                    self.ingestion._track(dest, root.id, PRIORITY_SELECTED_FILE)
+                except Exception:
+                    # Not recorded: never leave an orphan in the vault. A moved file goes back.
+                    if mode == "move" and not origin.exists():
+                        shutil.move(str(dest), str(origin))
+                    shutil.rmtree(dest.parent, ignore_errors=True)
+                    raise OSError(f"could not record {src.name}") from None
                 found = repo.source_by_path(self.kdb, str(dest))
                 if found is not None:
                     self.kdb["sources"].update_one({"_id": found.id}, {"$set": {
@@ -223,11 +230,13 @@ class Vault:
             folder = path.parent
             target = self.trash_dir / folder.name
             self.trash_dir.mkdir(parents=True, exist_ok=True)
-            if folder.exists():
+            new_path = path
+            if folder.exists():  # only point at the trash when the folder really went there
                 shutil.move(str(folder), str(target))
+                new_path = target / path.name
             self.ingestion._drop_chunks(source_id)
             self.kdb["sources"].update_one({"_id": source_id}, {"$set": {
-                "status": SourceStatus.TRASHED.value, "path": str(target / path.name),
+                "status": SourceStatus.TRASHED.value, "path": str(new_path),
                 "trashed_at": utcnow(), "updated_at": utcnow()}})
         self.ingestion._changed(source_id)
 
@@ -237,7 +246,7 @@ class Vault:
             if src.status != SourceStatus.TRASHED:
                 raise InvalidInput("this file is not in the trash")
             target = self.dir / path.parent.name
-            if path.parent.exists():
+            if path.parent.exists() and path.parent != target:
                 shutil.move(str(path.parent), str(target))
             self.kdb["sources"].update_one({"_id": source_id}, {
                 "$set": {"status": SourceStatus.PENDING.value, "path": str(target / path.name),
@@ -262,8 +271,13 @@ class Vault:
         Moving it out removes it from Folio; copying keeps it here too."""
         src, path = self._vault_source(source_id)
         doc = self.kdb["sources"].find_one({"_id": source_id}) or {}
-        folder = Path(dest_dir).expanduser() if dest_dir else Path(doc.get("origin_path") or "").parent
-        if not str(folder) or not folder.is_dir():
+        if dest_dir:
+            folder: Path | None = Path(dest_dir).expanduser()
+        elif doc.get("origin_path"):
+            folder = Path(doc["origin_path"]).parent
+        else:
+            folder = None  # never fall back to the working directory
+        if folder is None or not folder.is_absolute() or not folder.is_dir():
             raise InvalidInput("choose a folder to export to")
         if self.is_vault_path(folder):
             raise InvalidInput("choose a folder outside Folio's storage")
