@@ -15,23 +15,10 @@ TargetKind = Literal["source", "chunk", "entity", "claim", "none"]
 # --- requests -------------------------------------------------------------------------------
 
 
-class AddRoot(BaseModel):
-    path: str
-    watch: bool = True
-    include_hidden: bool = False
-    exclude: list[str] | None = None
-
-
 class ScanLocation(BaseModel):
     path: str
     label: str
     kind: str
-
-
-class ScanLocations(BaseModel):
-    locations: list[ScanLocation]
-    default_exclusions: list[str]
-    supported_extensions: list[str]
 
 
 class TagRef(BaseModel):
@@ -45,6 +32,7 @@ class FileItem(Source):
     """A file plus what labels said about it, so the Library shows how things are organized."""
     tags: list[TagRef] = Field(default_factory=list)
     description: str | None = None
+    title: str | None = None  # a readable name from a label or the AI organizer
 
 
 class SourcePage(BaseModel):
@@ -414,6 +402,7 @@ class SourceDetail(BaseModel):
     chunks: int
     tags: list[TagRef] = Field(default_factory=list)
     description: str | None = None
+    title: str | None = None
 
 
 class VoiceToggle(BaseModel):

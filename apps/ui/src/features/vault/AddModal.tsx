@@ -1,6 +1,6 @@
 /** "Add to Folio": dump files or folders into Folio's own storage. */
 import { useState } from "react";
-import { useVaultActions } from "@/api/queries";
+import { useDropPreview, useVaultActions } from "@/api/queries";
 import { Icon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
 import { basename } from "@/lib/format";
@@ -12,6 +12,7 @@ export function AddModal() {
   const paths = ui.use((s) => s.pendingPaths);
   const [mode, setMode] = useState<Mode | null>(null);
   const { add } = useVaultActions();
+  const { data: counts, isFetching: counting, error: countError } = useDropPreview(paths);
   const close = () => ui.set({ modal: "none", pendingPaths: [] });
   const more = async (directory: boolean) => {
     const picked = await pickPaths(directory);
@@ -27,9 +28,15 @@ export function AddModal() {
       title={<><Icon name="plus" /> Add to Folio</>}
       onClose={close}
       footer={<>
-        <span className="small muted grow">{paths.length ? `${paths.length} item(s) selected` : "Nothing selected yet"}</span>
+        <span className="small muted grow">
+          {!paths.length ? "Nothing selected yet"
+            : counting ? "Counting files…"
+            : countError ? <span style={{ color: "var(--bad)" }}>{(countError as Error).message}</span>
+            : counts ? <><b>{counts.files}</b> file{counts.files === 1 ? "" : "s"} to add{counts.skipped ? ` · ${counts.skipped} junk file${counts.skipped === 1 ? "" : "s"} skipped` : ""}</>
+            : `${paths.length} item(s) selected`}
+        </span>
         <button type="button" className="btn" onClick={close}>Cancel</button>
-        <button type="button" className="btn primary" disabled={!mode || !paths.length || add.isPending} onClick={submit}>
+        <button type="button" className="btn primary" disabled={!mode || !paths.length || add.isPending || counts?.files === 0} onClick={submit}>
           {add.isPending ? <Icon name="loader" spin /> : <Icon name="check" />} {mode === "copy" ? "Copy into Folio" : mode === "move" ? "Move into Folio" : "Add"}
         </button>
       </>}
@@ -63,7 +70,7 @@ export function AddModal() {
             move="It leaves its folder and lives only in Folio — no extra disk space. You can export it back anytime."
             copy="The original stays where it is; Folio keeps its own copy (uses space twice)." />
         </div>
-        <p className="tiny muted" style={{ margin: 0 }}>Hidden files and cache folders (like node_modules or .git) inside a folder are skipped. Files already in Folio are left where they are.</p>
+        <p className="tiny muted" style={{ margin: 0 }}>Junk is skipped automatically: hidden files, node_modules, .git, build/dist output, virtual environments, lockfiles, binaries and disk images. Files already in Folio are left where they are.</p>
       </div>
     </Modal>
   );

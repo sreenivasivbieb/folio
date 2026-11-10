@@ -342,7 +342,8 @@ class IngestionService:
             if not self._commit_index(src, drafts, st, digest):
                 return "cancelled: source changed or is no longer tracked"
         except Unavailable as exc:
-            if src.kind.value not in MEDIA:
+            if src.kind.value not in MEDIA or self.transcriber.installed():
+                # Only "speech is not set up" means wait; anything else is a real, visible failure.
                 self._failed(src.id, exc)
                 raise
             # Audio/video waiting for the speech model is not an error: it stays pending and
@@ -376,7 +377,10 @@ class IngestionService:
                                    mtime=st.st_mtime, content_hash=digest, indexed_hash=digest)
             self._changed(src.id)
             priority = (self.kdb["sources"].find_one({"_id": src.id}, {"priority": 1}) or {}).get("priority", 0)
-            self.queue.enqueue("extract_source", {"source_id": src.id}, dedupe_key=f"extract:{src.id}", priority=priority)
+            if self.settings.auto_extract:
+                self.queue.enqueue("extract_source", {"source_id": src.id}, dedupe_key=f"extract:{src.id}", priority=priority)
+            # Title, description and a few tags for the Library (needs a connected AI model).
+            self.queue.enqueue("organize_source", {"source_id": src.id}, dedupe_key=f"organize:{src.id}", priority=priority)
             return True
 
     def _parse(self, path: Path, job: Job):  # type: ignore[no-untyped-def]

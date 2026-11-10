@@ -1,19 +1,43 @@
-"""Filesystem locations and scan exclusions, independent of the checkout's location."""
+"""What Folio never imports: system locations, and junk inside dropped folders."""
 
 from __future__ import annotations
 
 import os
 import re
 import stat
-import string
 import sys
 from pathlib import Path
 
-DEFAULT_EXCLUSIONS = [".git", ".hg", ".svn", "node_modules", ".venv", "venv", "__pycache__",
-                      ".cache", ".ssh", ".gnupg", ".aws", ".pki",
-                      # Windows system/cache entries that are never personal documents
-                      "$Recycle.Bin", "System Volume Information", "pagefile.sys", "hiberfil.sys",
-                      "swapfile.sys", "DumpStack.log.tmp", "Thumbs.db", "desktop.ini"]
+# Smart ignore: skipped silently when a folder is dropped (no configuration needed).
+JUNK_DIRS = frozenset(n.lower() for n in (
+    ".git", ".svn", ".hg", "node_modules", "bower_components", "venv", ".venv", "env", "__pycache__",
+    ".pytest_cache", ".mypy_cache", ".ruff_cache", "target", "dist", "build", "out", ".next", ".nuxt",
+    ".cache", ".idea", ".vscode", "$RECYCLE.BIN", "System Volume Information",
+    ".ssh", ".gnupg", ".aws", ".pki",  # credentials: never imported
+))
+JUNK_FILES = frozenset(n.lower() for n in (
+    ".DS_Store", "Thumbs.db", "desktop.ini", "package-lock.json", "pnpm-lock.yaml", "yarn.lock",
+    "uv.lock", "Cargo.lock", "poetry.lock", "Pipfile.lock", "composer.lock",
+    "pagefile.sys", "hiberfil.sys", "swapfile.sys", "DumpStack.log.tmp",
+))
+JUNK_EXTENSIONS = frozenset((
+    ".exe", ".dll", ".so", ".dylib", ".o", ".obj", ".a", ".lib", ".pyc", ".pyo", ".class", ".jar",
+    ".wasm", ".iso", ".img", ".vmdk", ".vdi", ".qcow2",
+))
+_SHARED_LIB = re.compile(r"\.so(\.\d+)+$", re.I)  # libfoo.so.6
+
+# Kept for the scanner's per-root exclusion patterns (folder names and file names).
+DEFAULT_EXCLUSIONS = sorted(JUNK_DIRS | JUNK_FILES)
+
+
+def is_junk(path: Path, name: str, is_dir: bool) -> bool:
+    """Hidden entries, developer/build/cache folders, lockfiles, binaries and disk images."""
+    if is_hidden(path, name):
+        return True
+    low = name.lower()
+    if is_dir:
+        return low in JUNK_DIRS
+    return (low in JUNK_FILES or Path(low).suffix in JUNK_EXTENSIONS or bool(_SHARED_LIB.search(low)))
 
 
 def _windows_system_dirs() -> list[Path]:
@@ -41,38 +65,3 @@ def is_hidden(path: Path, name: str) -> bool:
             return False
         return bool(attrs & (stat.FILE_ATTRIBUTE_HIDDEN | stat.FILE_ATTRIBUTE_SYSTEM))  # type: ignore[attr-defined]
     return False
-
-
-def windows_drives() -> list[str]:
-    try:
-        return list(os.listdrives())  # type: ignore[attr-defined]  # Python 3.12+
-    except (AttributeError, OSError):
-        return [f"{c}:\\" for c in string.ascii_uppercase if os.path.exists(f"{c}:\\")]
-
-
-def scan_locations(home: Path | None = None, mountinfo: Path = Path("/proc/self/mountinfo")) -> list[dict[str, str]]:
-    home = (home or Path.home()).resolve()
-    if sys.platform == "win32":
-        locations = [{"path": str(home), "label": "Home folder", "kind": "home"}]
-        for drive in windows_drives():
-            locations.append({"path": drive, "label": f"Drive {drive.rstrip(chr(92))}", "kind": "drive"})
-        return locations
-    locations = [{"path": str(home), "label": "Home folder", "kind": "home"}]
-    seen = {str(home), "/"}
-    try:
-        lines = mountinfo.read_text().splitlines()
-    except OSError:
-        lines = []
-    for line in lines:
-        parts = line.split()
-        if len(parts) < 6 or "-" not in parts:
-            continue
-        mount = re.sub(r"\\([0-7]{3})", lambda m: chr(int(m[1], 8)), parts[4])
-        fs = parts[parts.index("-") + 1]
-        if (mount in seen or fs in {"proc", "sysfs", "tmpfs", "devtmpfs", "cgroup2", "squashfs", "overlay"}
-                or not any(mount == p or mount.startswith(p + "/") for p in ("/mnt", "/media", "/run/media", "/home"))):
-            continue
-        seen.add(mount)
-        locations.append({"path": mount, "label": Path(mount).name or mount, "kind": "drive"})
-    locations.append({"path": "/", "label": "Entire filesystem (readable files)", "kind": "system"})
-    return locations

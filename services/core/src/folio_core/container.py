@@ -27,6 +27,8 @@ from .jobs import Job, JobQueue, WorkerPool
 from .knowledge import KnowledgeService
 from .learning import CorrectionStore
 from .ledger import Ledger
+from .organize import FileOrganizer
+from .organize.drops import DropService
 from .providers import Providers, build_providers
 from .providers.drive import DriveService
 from .providers.llm.router import ConfiguredLLM
@@ -69,6 +71,8 @@ class Container:
     watcher: FolderWatcher
     drive: DriveService
     vault: Vault
+    organizer: FileOrganizer
+    drops: DropService
 
     def current_extractor(self) -> Extractor:
         return self.extraction.extractor()
@@ -78,6 +82,9 @@ class Container:
         for db in (self.kdb, self.index):  # before any worker writes: reclaim disk space
             db.compact()
         self.vault.root()  # Folio's own storage folder is the only place it indexes
+        self.vault.rehome()  # before the rescan, so a moved data folder never duplicates files
+        self.extraction.cleanup_image_facts()  # once: drop junk facts mined from screenshots earlier
+        self.organizer.backfill(self.queue)  # files indexed before an AI model was connected
         self.workers.start()
         if self.settings.watch:
             self.watcher.start()
@@ -156,7 +163,13 @@ def build_container(settings: Settings, providers: Providers | None = None,
         return f"{stt.model_id} ready; {n} audio/video file(s) queued"
 
     vault = Vault(ingestion)
+    organizer = FileOrganizer(kdb=kdb, index=index, ledger=ledger, knowledge=knowledge, llm=llm,
+                              gate=extraction._llm_gate)
+    drops = DropService(kdb=kdb, index=index, ledger=ledger, knowledge=knowledge, vault=vault, queue=queue,
+                        llm=llm, gate=extraction._llm_gate)
     workers = WorkerPool(queue, {
+        "organize_source": organizer.organize_job,
+        "organize_drop": drops.organize_job,
         "vault_import": vault.import_job,
         "scan_root": ingestion.scan_root_job,
         "index_source": ingestion.index_source,
@@ -170,5 +183,5 @@ def build_container(settings: Settings, providers: Providers | None = None,
         learning=learning, ingestion=ingestion, extraction=extraction, labels=labels, search=search,
         cards=EntityCards(kdb, search), views=Views(kdb), review=ReviewQueue(kdb, index),
         exporter=Exporter(kdb, bus), workers=workers, watcher=FolderWatcher(ingestion), drive=DriveService(secrets),
-        vault=vault,
+        vault=vault, organizer=organizer, drops=drops,
     )

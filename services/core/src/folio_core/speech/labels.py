@@ -94,6 +94,24 @@ class LabelService:
             self._target = (target_kind, target_ids)
             self.recorder.start()
 
+    def stop_text(self) -> str:
+        """Stop recording and return English text only (Hindi/Hinglish are translated) — for a
+        drop's label box, where the user reviews the words before organizing."""
+        audio = self.audio_dir / f"{new_id('label')}.wav"
+        try:
+            duration = self.recorder.stop(audio)
+            if duration < 0.3:
+                raise InvalidInput("recording too short")
+            ensure_allowed(self.kdb, self.transcriber)
+            segments = self.transcriber.transcribe(audio, prompt=self.learning.vocabulary_prompt(),
+                                                   task="translate", beam_size=BEAM_SIZE)
+        finally:
+            audio.unlink(missing_ok=True)
+        text = " ".join(s.text for s in segments).strip()
+        if not text:
+            raise InvalidInput("no speech detected — hold the button while you speak")
+        return text
+
     def stop(self) -> Label:
         label_id = new_id("label")
         audio = self.audio_dir / f"{label_id}.wav"

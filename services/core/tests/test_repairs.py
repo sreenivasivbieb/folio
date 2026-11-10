@@ -12,7 +12,6 @@ from folio_core.config import Settings
 from folio_core.domain.errors import InvalidInput, Unavailable
 from folio_core.domain.models import Extractor, SourceStatus
 from folio_core.extraction.types import ExtractionFailed
-from folio_core.ingestion.locations import scan_locations
 from folio_core.jobs import JobQueue
 from folio_core.realtime import Bus
 from folio_core.runtime import instance_lock
@@ -148,14 +147,6 @@ def test_unreadable_file_does_not_abort_scan(container, tmp_path, monkeypatch):
     container.ingestion.add_root(str(folder))
     drain(container)
     assert [Path(s.path).name for s in repo.list_sources(container.kdb)] == ["good.txt"]
-
-
-@pytest.mark.skipif(sys.platform == "win32", reason="reads Linux /proc mountinfo; Windows lists drives")
-def test_locations_decode_spaces_and_are_not_checkout_specific(tmp_path):
-    mounts = tmp_path / "mountinfo"
-    mounts.write_text("30 1 8:1 / /mnt/My\\040Drive rw - ext4 /dev/sda1 rw\n")
-    locations = scan_locations(home=tmp_path / "home", mountinfo=mounts)
-    assert {location["path"] for location in locations} == {str(tmp_path / "home"), "/mnt/My Drive", "/"}
 
 
 def test_only_one_core_can_own_a_data_folder(tmp_path):

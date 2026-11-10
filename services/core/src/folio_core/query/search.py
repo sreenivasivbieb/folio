@@ -113,6 +113,10 @@ class HybridSearch:
                 for e in c.get("evidence", []):
                     if e.get("label_id"):  # a label said it about this file
                         add(e.get("source_id"), hit)
+            # Projects, drop folders and tags: every file organized under them.
+            for e in entities:
+                for sid in repo.files_tagged(self.kdb, e.id):
+                    add(sid, e.name)
         words = [w for w in _TOKEN.findall(q.lower()) if len(w) > 1]
         pattern = "".join(f"(?=.*{re.escape(w)})" for w in words)
         # 1b. Descriptions, titles and other values said about a file ("lexsi hackathon video demo").
@@ -125,8 +129,12 @@ class HybridSearch:
                                               "status": {"$ne": "rejected"}}):
                 by_subject.setdefault(c["subject_id"], []).append(c["value"])
             for c in described:
+                hit = f"{c['predicate'].replace('_', ' ')}: {str(c['value'])[:60]}"
                 for sid in by_subject.get(c["subject_id"], []):
-                    add(sid, f"{c['predicate'].replace('_', ' ')}: {str(c['value'])[:60]}")
+                    add(sid, hit)
+                if c["predicate"] in ("label", "summary"):  # a project's label / AI summary
+                    for sid in repo.files_tagged(self.kdb, c["subject_id"]):
+                        add(sid, hit)
         # 2. Label transcripts that mention the words.
         if words:
             for lab in self.kdb["labels"].find({"transcript": {"$regex": pattern, "$options": "i"},
@@ -180,6 +188,18 @@ class HybridSearch:
                                                "path": d["path"], "kind": d.get("kind", "other"),
                                                "status": d.get("status", "")})
         return list(hits.values())[:k]
+
+    def projects_matching(self, q: str, limit: int = 5) -> list[Any]:
+        """Projects whose user label or AI summary mentions every typed word (highest weight)."""
+        words = [w for w in _TOKEN.findall(q.lower()) if len(w) > 1]
+        if not words:
+            return []
+        pattern = "".join(f"(?=.*{re.escape(w)})" for w in words)
+        ids = list(dict.fromkeys(c["subject_id"] for c in self.kdb["claims"].find(
+            {"predicate": {"$in": ["label", "summary"]}, "status": {"$ne": "rejected"},
+             "value": {"$regex": pattern, "$options": "i"}}).limit(50)))
+        ents = repo.get_entities(self.kdb, ids)
+        return [ents[i] for i in ids if i in ents and ents[i].status.value not in ("merged", "rejected")][:limit]
 
     def recent_files(self, k: int = 8) -> list[dict[str, Any]]:
         """What the search box shows before anything is typed."""

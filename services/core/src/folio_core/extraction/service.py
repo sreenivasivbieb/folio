@@ -13,12 +13,13 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import threading
 from collections.abc import Callable
 from pathlib import Path
 
 from ..domain.errors import InvalidInput
 from ..domain.ids import new_id
-from ..domain.models import ClaimStatus, EntityStatus, Extractor, Source, SourceStatus
+from ..domain.models import ClaimStatus, EntityStatus, Extractor, Source, SourceKind, SourceStatus
 from ..domain.schema import REPRESENTED_BY
 from ..jobs import Job, JobQueue
 from ..knowledge import KnowledgeService
@@ -64,11 +65,26 @@ class ExtractionService:
                 n += 1
         return n
 
+    # One model call at a time across workers: two files extracting in parallel exhausted
+    # small per-minute token limits (e.g. Groq's free tier) and failed jobs. Labels don't wait on this.
+    _llm_gate = threading.Semaphore(1)
+
+    def _extract(self, extractor: ExtractorProto, text: str, ctx):  # type: ignore[no-untyped-def]
+        if not extractor.uses_llm:
+            return extractor.extract(text, ctx)
+        with self._llm_gate:
+            return extractor.extract(text, ctx)
+
     def extract_source(self, job: Job) -> str:
         src = repo.get_source(self.kdb, job.payload["source_id"])
         if src is None or src.status != SourceStatus.INDEXED:
             return "skipped: source not indexed"
         extractor = self.extractor()
+        if extractor.uses_llm and src.kind == SourceKind.IMAGE:
+            # Screenshot / photo OCR is mostly UI text and terminal output: mining it for facts
+            # flooded the graph and review queue. The organizer still titles and tags it.
+            removed = self._prune(src, set(), set(), f"model:{extractor.model_id}")
+            return "organized only (no fact extraction for images)" + (f"; {removed} old proposals removed" if removed else "")
         if extractor.uses_llm:
             ensure_allowed(self.kdb, getattr(extractor, "llm", None))
         chunks = repo.chunks_for_source(self.index.reader(), src.id)
@@ -96,7 +112,7 @@ class ExtractionService:
                     negatives=self.learning.negatives(chunk.text) if extractor.uses_llm else [],
                 )
                 try:
-                    out, _problems = validate_output(extractor.extract(chunk.text, ctx), schema, chunk.text)
+                    out, _problems = validate_output(self._extract(extractor, chunk.text, ctx), schema, chunk.text)
                 except ExtractionFailed as exc:
                     self._record_issue(src.id, chunk.id, str(exc), exc.raw)
                     stats["failed"] += 1
@@ -159,6 +175,20 @@ class ExtractionService:
         self.knowledge.add_claim_tx(tx, subject_id=entity["id"], predicate=REPRESENTED_BY, value=src.id,
                                     status=ClaimStatus.VERIFIED, extractor=Extractor(kind="system"))
         return entity["id"]
+
+    def cleanup_image_facts(self) -> int:
+        """One-time cleanup: unconfirmed model facts mined from screenshots/photos before images
+        were excluded from fact extraction. Confirmed facts are kept."""
+        removed = 0
+        for d in self.kdb["sources"].find({"kind": SourceKind.IMAGE.value, "status": SourceStatus.INDEXED.value,
+                                            "image_facts_cleaned": None}):
+            src = repo.source_from_doc(d)
+            models = {(c.get("extractor") or {}).get("model") for c in self.kdb["claims"].find(
+                {"evidence.source_id": src.id, "status": "proposed", "extractor.kind": "model"})}
+            for model in models - {None}:
+                removed += self._prune(src, set(), set(), f"model:{model}")
+            self.kdb["sources"].update_one({"_id": src.id}, {"$set": {"image_facts_cleaned": True}})
+        return removed
 
     def _prune(self, src: Source, live_chunks: set[str], produced: set[str], actor: str,
                failed_chunks: set[str] | None = None) -> int:

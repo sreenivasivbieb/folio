@@ -23,6 +23,7 @@ export function SourcesPanel() {
   const [filter, setFilter] = useState("");
   const [offset, setOffset] = useState(0);
   const [tag, setTag] = useState<{ id: string; name: string } | null>(null);
+  const [showAllTags, setShowAllTags] = useState(false);
   const { data: page, isPending, error, refetch } = useFilePage(filter, offset, tag?.id ?? null);
   const { data: tags } = useFileTags();
   const pickTag = (t: { id: string; name: string } | null) => { setTag(t && tag?.id === t.id ? null : t); setOffset(0); };
@@ -46,11 +47,16 @@ export function SourcesPanel() {
       </div>
       {!!tags?.length && (
         <div className="tag-row" role="toolbar" aria-label="Filter by topic">
-          {tags.map((t) => (
+          {(showAllTags ? tags : tags.slice(0, 8)).map((t) => (
             <button type="button" key={t.id} className="tag-chip" aria-pressed={tag?.id === t.id} onClick={() => pickTag(t)} title={`${t.type} · ${t.count} file(s)`}>
               {t.name}<span>{t.count}</span>
             </button>
           ))}
+        {tags.length > 8 && (
+            <button type="button" className="tag-chip more" onClick={() => setShowAllTags((v) => !v)}>
+              {showAllTags ? "less" : `+${tags.length - 8} more`}
+            </button>
+          )}
         </div>
       )}
       <div className="sidebar-head" style={{ paddingTop: 14 }}>
@@ -70,7 +76,8 @@ export function SourcesPanel() {
           <div key={s.id} className={`list-row ${active === s.id ? "active" : ""}`} onClick={() => selectSource(s.id)} title={s.error ?? s.path}>
             <div className="file-icon"><Icon name={kindIcon(s.kind)} size={14} /></div>
             <div className="grow">
-              <div className="title ellipsis">{basename(s.path)}</div>
+              <div className="title ellipsis">{s.title ?? basename(s.path)}</div>
+              {s.title && <div className="meta ellipsis file-name">{basename(s.path)}</div>}
               {s.description
                 ? <div className="meta ellipsis file-desc" title={s.description}>{s.description}</div>
                 : <div className={`meta ellipsis`} style={s.status === "failed" ? { color: "var(--bad)" } : undefined}>{statusLine(s, running.get(s.id))}</div>}

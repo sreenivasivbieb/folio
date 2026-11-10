@@ -23,6 +23,7 @@ PREFIXES = {
     "group": "grp",
     "job": "job",
     "schema": "sch",
+    "drop": "drp",
 }
 
 

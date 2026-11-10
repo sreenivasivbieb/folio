@@ -7,42 +7,12 @@ from fastapi import APIRouter, Query
 from fastapi.responses import FileResponse
 
 from ...domain.errors import NotFound
-from ...domain.models import Chunk, Root, Source
-from ...ingestion.locations import DEFAULT_EXCLUSIONS, scan_locations
+from ...domain.models import Chunk, Source
 from ...store import repo
 from ..deps import C
-from ..dto import AddRoot, FileItem, Ok, ScanLocations, SourceDetail, SourcePage, TagRef
+from ..dto import FileItem, Ok, SourceDetail, SourcePage, TagRef
 
 router = APIRouter(tags=["sources"])
-
-
-@router.get("/roots", response_model=list[Root])
-def list_roots(c: C) -> list[Root]:
-    return c.ingestion.roots()
-
-
-@router.post("/roots", response_model=Root)
-def add_root(body: AddRoot, c: C) -> Root:
-    """Select a file or folder. Nothing is copied or moved; indexing starts in the background."""
-    root = c.ingestion.add_root(body.path, body.watch, body.include_hidden, body.exclude)
-    c.watcher.sync()
-    c.workers.notify()
-    return root
-
-
-@router.delete("/roots/{root_id}", response_model=Ok)
-def remove_root(root_id: str, c: C) -> Ok:
-    """Stop tracking a folder: its files leave the list and the index; knowledge is kept."""
-    n = c.ingestion.remove_root(root_id)
-    c.watcher.sync()
-    return Ok(detail=f"{n} file(s) no longer tracked")
-
-
-@router.post("/rescan", response_model=Ok)
-def rescan(c: C) -> Ok:
-    n = c.ingestion.rescan_all()
-    c.workers.notify()
-    return Ok(detail=f"{n} file(s) queued")
 
 
 @router.get("/sources", response_model=list[Source])
@@ -51,12 +21,6 @@ def list_sources(c: C, root_id: str | None = None, limit: int = Query(1000, ge=1
     if root_id:
         query["root_id"] = root_id
     return [repo.source_from_doc(d) for d in c.kdb["sources"].find(query).sort("path", 1).limit(limit)]
-
-
-@router.get("/scan/locations", response_model=ScanLocations)
-def locations(c: C) -> ScanLocations:
-    return ScanLocations(locations=scan_locations(), default_exclusions=DEFAULT_EXCLUSIONS,
-                         supported_extensions=c.ingestion.registry.extensions)
 
 
 @router.get("/files", response_model=SourcePage)

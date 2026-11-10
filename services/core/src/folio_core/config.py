@@ -49,6 +49,10 @@ class Settings:
     parse_timeout_s: int = 180
     parse_memory_mb: int = 2048
     watch: bool = True
+    # Deep fact extraction of every passage (a review queue of AI-found facts). Off by default:
+    # the graph comes from the user's labels and the AI organizer. Available on demand in
+    # Settings -> Data ("Re-run extraction").
+    auto_extract: bool = False
 
     @property
     def secrets_file(self) -> Path:

@@ -36,8 +36,9 @@ def test_token_and_origin_are_enforced(container):
 
 
 def test_full_loop_over_http(client, container, files):
-    r = client.post("/api/roots", json={"path": str(files / "contract.pdf")})
+    r = client.post("/api/vault/import", json={"paths": [str(files / "contract.pdf")], "mode": "copy"})
     assert r.status_code == 200, r.text
+    assert r.json() == {"files": 1, "skipped": 0}
     drain(container)
     src = client.get("/api/sources").json()[0]
     assert src["status"] == "indexed"

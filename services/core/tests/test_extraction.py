@@ -86,7 +86,7 @@ def test_rerun_on_unchanged_data_makes_zero_model_calls(tmp_path, files):
     c.queue.enqueue("extract_source", {"source_id": src.id})  # explicit re-extraction
     drain(c)
     assert len(llm.calls) == calls
-    assert "cached" in c.queue.list("done", 1)[0].message
+    assert "cached" in next(j for j in c.queue.list("done") if j.kind == "extract_source").message
 
 
 def test_rejected_claim_is_never_reproposed_and_verified_is_never_changed(container, files):
@@ -105,7 +105,7 @@ def test_rejected_claim_is_never_reproposed_and_verified_is_never_changed(contai
     owns_now = _claims(container, "owns")
     assert [c.status for c in owns_now] == [ClaimStatus.REJECTED]
     assert repo.get_claim(container.kdb, signed.id).status == ClaimStatus.VERIFIED
-    assert "blocked" in container.queue.list("done", 1)[0].message
+    assert "blocked" in next(j for j in container.queue.list("done") if j.kind == "extract_source").message
 
 
 def test_correction_rejects_original_and_blocks_its_pattern(container, files):

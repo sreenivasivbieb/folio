@@ -37,8 +37,9 @@ def run_sandboxed(parser_name: str, path: Path, timeout_s: int, memory_mb: int) 
     except subprocess.TimeoutExpired as exc:
         raise ParseError(f"parser timed out after {timeout_s}s") from exc
     if proc.returncode != 0:
-        tail = proc.stderr.decode(errors="replace").strip().splitlines()[-3:]
-        raise ParseError(f"parser exited with code {proc.returncode}: {' '.join(tail)}")
+        from ..providers.stt.audio import clean_child_error
+
+        raise ParseError(clean_child_error(proc.stderr) or f"parser exited with code {proc.returncode}")
     return [ParsedUnit(**u) for u in json.loads(proc.stdout)]
 
 

@@ -16,7 +16,6 @@ export type Claim = S["Claim"];
 export type Evidence = S["Evidence"];
 export type Locator = S["Locator"];
 export type Source = S["Source"];
-export type Root = S["Root"];
 export type Chunk = S["Chunk"];
 export type Label = S["Label"];
 export type Job = S["Job"];

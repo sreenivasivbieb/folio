@@ -32,6 +32,11 @@ class TrashItem(BaseModel):
     origin_path: str | None = None
 
 
+class DropPreview(BaseModel):
+    files: int  # files that will be added
+    skipped: int  # hidden / node_modules / build output / lockfiles / binaries, skipped silently
+
+
 class VaultInfo(BaseModel):
     path: str
     files: int
@@ -48,14 +53,24 @@ def info(c: C) -> VaultInfo:
                      trashed=c.kdb["sources"].count_documents({"status": "trashed"}))
 
 
-@router.post("/vault/import", response_model=Ok)
-def import_files(body: ImportBody, c: C) -> Ok:
+class PreviewBody(BaseModel):
+    paths: list[str] = Field(min_length=1)
+
+
+@router.post("/vault/preview", response_model=DropPreview)
+def preview_drop(body: PreviewBody, c: C) -> DropPreview:
+    """Count what a drop would add before anything is moved or copied."""
+    return DropPreview(**c.vault.preview(body.paths))
+
+
+@router.post("/vault/import", response_model=DropPreview)
+def import_files(body: ImportBody, c: C) -> DropPreview:
     """Queue the import; progress shows in Activity. The list of paths comes from the file picker
-    or from files dropped onto the window."""
-    c.vault._expand(body.paths)  # validate now, so a bad path is reported immediately
+    or from files dropped onto the window. Junk is skipped automatically and counted."""
+    counts = c.vault.preview(body.paths)  # validates now, so a bad path is reported immediately
     c.queue.enqueue("vault_import", {"paths": body.paths, "mode": body.mode}, priority=30)
     c.workers.notify()
-    return Ok(detail="Adding to Folio…")
+    return DropPreview(**counts)
 
 
 @router.post("/vault/{source_id}/trash", response_model=Ok)

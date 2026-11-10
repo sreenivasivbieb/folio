@@ -46,24 +46,30 @@ class OpenAICompatibleLLM:
                                     trust_env=not self.is_local)
         self._json_schema_ok = True
 
+    RATE_LIMIT_ATTEMPTS = 8  # free tiers (e.g. Groq: a few thousand tokens per minute) need patience
+    SERVER_ATTEMPTS = 4
+
     def _post(self, body: dict[str, Any]) -> httpx.Response:
         delay = 2.0
-        for attempt in range(4):
+        attempt = 0
+        while True:
+            attempt += 1
             try:
                 resp = self._client.post(f"{self.base_url}/chat/completions", json=body)
             except httpx.TransportError as exc:
-                if attempt == 3:
+                if attempt >= self.SERVER_ATTEMPTS:
                     raise Unavailable(f"cannot reach {self.base_url}: {exc}") from exc
                 time.sleep(delay)
                 delay *= 2
                 continue
-            if resp.status_code in (429, 500, 502, 503, 504) and attempt < 3:
-                wait = retry_after(resp.headers.get("retry-after"), delay)
-                time.sleep(min(wait, 30))
-                delay *= 2
+            limited = resp.status_code == 429
+            budget = self.RATE_LIMIT_ATTEMPTS if limited else self.SERVER_ATTEMPTS
+            if (limited or resp.status_code in (500, 502, 503, 504)) and attempt < budget:
+                wait = retry_after(resp.headers.get("retry-after"), 0) or _suggested_wait(resp) or delay
+                time.sleep(min(wait + 0.5, 60))
+                delay = min(delay * 2, 60)
                 continue
             return resp
-        return resp
 
     @staticmethod
     def _error(resp: httpx.Response) -> str:
@@ -148,3 +154,12 @@ def retry_after(header: str | None, default: float) -> float:
         return max(0.0, (when - datetime.now(UTC)).total_seconds())
     except (TypeError, ValueError, IndexError, OverflowError):
         return default
+
+
+def _suggested_wait(resp: httpx.Response) -> float:
+    """Providers often say how long to wait in the message: 'Please try again in 7.66s' / '450ms' / '1m2s'."""
+    m = re.search(r"try again in\s+(?:(\d+)m)?(?:([\d.]+)s)?(?:([\d.]+)ms)?", resp.text or "", re.I)
+    if not m or not any(m.groups()):
+        return 0.0
+    minutes, seconds, millis = (float(g) if g else 0.0 for g in m.groups())
+    return minutes * 60 + seconds + millis / 1000

@@ -85,16 +85,6 @@ def test_nested_roots_are_scanned_once(container, files):
     assert src is not None and src.root_id == inner.id
 
 
-def test_windows_scan_locations_list_drives(monkeypatch, tmp_path):
-    from folio_core.ingestion import locations
-
-    monkeypatch.setattr(locations.sys, "platform", "win32")
-    monkeypatch.setattr(locations, "windows_drives", lambda: ["C:\\", "D:\\"])
-    found = locations.scan_locations(home=tmp_path)
-    assert [loc["kind"] for loc in found] == ["home", "drive", "drive"]
-    assert all(loc["path"] != "/" for loc in found)
-
-
 def test_old_finished_jobs_are_pruned_but_failures_kept(container):
     q = container.queue
     done = q.enqueue("index_source", {"source_id": "a"}, dedupe_key="index:a")

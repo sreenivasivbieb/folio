@@ -15,11 +15,6 @@ export function useStatus() {
   return useQuery({ queryKey: ["status"], queryFn: async () => unwrap(await client.GET("/api/status")) });
 }
 
-export function useRoots() {
-  const { client } = useApi();
-  return useQuery({ queryKey: ["roots"], queryFn: async () => unwrap(await client.GET("/api/roots")) });
-}
-
 export function useSources() {
   const { client } = useApi();
   return useQuery({ queryKey: ["sources"], queryFn: async () => unwrap(await client.GET("/api/sources")) });
@@ -341,4 +336,14 @@ export function useVaultActions() {
     exportFile: useAction(async (a: { id: string; mode: "move" | "copy"; dest_dir: string | null }) =>
       unwrap(await client.POST("/api/vault/{source_id}/export", { ...id(a.id), body: { mode: a.mode, dest_dir: a.dest_dir } }))),
   };
+}
+
+/** What a drop would add, and how much junk (node_modules, build output, binaries...) is skipped. */
+export function useDropPreview(paths: string[]) {
+  const { client } = useApi();
+  return useQuery({
+    queryKey: ["drop-preview", paths],
+    enabled: paths.length > 0,
+    queryFn: async () => unwrap(await client.POST("/api/vault/preview", { body: { paths } })),
+  });
 }

@@ -20,7 +20,7 @@ _created: list[Container] = []
 
 
 def make_container(tmp: Path, db_name: str | None = None, **kw) -> Container:  # type: ignore[no-untyped-def]
-    settings = Settings(data_dir=tmp / "data", watch=False, stt="none", workers=1)
+    settings = Settings(data_dir=tmp / "data", watch=False, stt="none", workers=1, auto_extract=True)
     providers = Providers(embedder=HashingEmbedder(), stt=kw.pop("stt", NoTranscriber("tests")),
                           llm=kw.pop("llm", FakeLLM()))
     c = build_container(settings, providers=providers, **kw)

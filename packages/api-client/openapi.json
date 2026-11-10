@@ -308,135 +308,6 @@
         }
       }
     },
-    "/api/roots": {
-      "get": {
-        "tags": [
-          "sources"
-        ],
-        "summary": "List Roots",
-        "operationId": "list_roots_api_roots_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/Root"
-                  },
-                  "type": "array",
-                  "title": "Response List Roots Api Roots Get"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "sources"
-        ],
-        "summary": "Add Root",
-        "description": "Select a file or folder. Nothing is copied or moved; indexing starts in the background.",
-        "operationId": "add_root_api_roots_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AddRoot"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Root"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/roots/{root_id}": {
-      "delete": {
-        "tags": [
-          "sources"
-        ],
-        "summary": "Remove Root",
-        "description": "Stop tracking a folder: its files leave the list and the index; knowledge is kept.",
-        "operationId": "remove_root_api_roots__root_id__delete",
-        "parameters": [
-          {
-            "name": "root_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Root Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Ok"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/rescan": {
-      "post": {
-        "tags": [
-          "sources"
-        ],
-        "summary": "Rescan",
-        "operationId": "rescan_api_rescan_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Ok"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/sources": {
       "get": {
         "tags": [
@@ -495,27 +366,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/scan/locations": {
-      "get": {
-        "tags": [
-          "sources"
-        ],
-        "summary": "Locations",
-        "operationId": "locations_api_scan_locations_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScanLocations"
                 }
               }
             }
@@ -3580,13 +3430,55 @@
         }
       }
     },
+    "/api/vault/preview": {
+      "post": {
+        "tags": [
+          "vault"
+        ],
+        "summary": "Preview Drop",
+        "description": "Count what a drop would add before anything is moved or copied.",
+        "operationId": "preview_drop_api_vault_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DropPreview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/vault/import": {
       "post": {
         "tags": [
           "vault"
         ],
         "summary": "Import Files",
-        "description": "Queue the import; progress shows in Activity. The list of paths comes from the file picker\nor from files dropped onto the window.",
+        "description": "Queue the import; progress shows in Activity. The list of paths comes from the file picker\nor from files dropped onto the window. Junk is skipped automatically and counted.",
         "operationId": "import_files_api_vault_import_post",
         "requestBody": {
           "content": {
@@ -3604,7 +3496,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Ok"
+                  "$ref": "#/components/schemas/DropPreview"
                 }
               }
             }
@@ -3845,6 +3737,338 @@
           }
         }
       }
+    },
+    "/api/drops": {
+      "post": {
+        "tags": [
+          "drops"
+        ],
+        "summary": "Create Drop",
+        "description": "Register dropped files/folders (junk skipped) and import them; then ask for a label.",
+        "operationId": "create_drop_api_drops_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DropBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Drop"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "drops"
+        ],
+        "summary": "List Drops",
+        "operationId": "list_drops_api_drops_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Drop"
+                  },
+                  "title": "Response List Drops Api Drops Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/drops/{drop_id}": {
+      "get": {
+        "tags": [
+          "drops"
+        ],
+        "summary": "Get Drop",
+        "operationId": "get_drop_api_drops__drop_id__get",
+        "parameters": [
+          {
+            "name": "drop_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Drop Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Drop"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/drops/{drop_id}/label": {
+      "post": {
+        "tags": [
+          "drops"
+        ],
+        "summary": "Label Drop",
+        "description": "The user's words about the drop: the AI organizes the files from them.",
+        "operationId": "label_drop_api_drops__drop_id__label_post",
+        "parameters": [
+          {
+            "name": "drop_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Drop Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LabelBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Drop"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/drops/{drop_id}/disk-organization/preview": {
+      "post": {
+        "tags": [
+          "drops"
+        ],
+        "summary": "Disk Preview",
+        "description": "Where each file would move inside the dropped folder. Nothing is moved.",
+        "operationId": "disk_preview_api_drops__drop_id__disk_organization_preview_post",
+        "parameters": [
+          {
+            "name": "drop_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Drop Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiskPreview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/drops/{drop_id}/apply-disk-organization": {
+      "post": {
+        "tags": [
+          "drops"
+        ],
+        "summary": "Apply Disk",
+        "description": "Move the files into the AI folders inside the dropped folder (only on explicit request).",
+        "operationId": "apply_disk_api_drops__drop_id__apply_disk_organization_post",
+        "parameters": [
+          {
+            "name": "drop_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Drop Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiskResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/drops/{drop_id}/disk-organization/undo": {
+      "post": {
+        "tags": [
+          "drops"
+        ],
+        "summary": "Undo Disk",
+        "operationId": "undo_disk_api_drops__drop_id__disk_organization_undo_post",
+        "parameters": [
+          {
+            "name": "drop_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Drop Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiskResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/voice/transcribe": {
+      "post": {
+        "tags": [
+          "drops"
+        ],
+        "summary": "Transcribe",
+        "description": "Stop push-to-talk and return the words only (for the drop label box).",
+        "operationId": "transcribe_api_voice_transcribe_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transcript"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3893,43 +4117,6 @@
           "rate"
         ],
         "title": "Acceptance"
-      },
-      "AddRoot": {
-        "properties": {
-          "path": {
-            "type": "string",
-            "title": "Path"
-          },
-          "watch": {
-            "type": "boolean",
-            "title": "Watch",
-            "default": true
-          },
-          "include_hidden": {
-            "type": "boolean",
-            "title": "Include Hidden",
-            "default": false
-          },
-          "exclude": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Exclude"
-          }
-        },
-        "type": "object",
-        "required": [
-          "path"
-        ],
-        "title": "AddRoot"
       },
       "AliasBody": {
         "properties": {
@@ -4410,6 +4597,87 @@
         ],
         "title": "CreateEntity"
       },
+      "DiskMove": {
+        "properties": {
+          "from": {
+            "type": "string",
+            "title": "From"
+          },
+          "to": {
+            "type": "string",
+            "title": "To"
+          },
+          "folder": {
+            "type": "string",
+            "title": "Folder"
+          }
+        },
+        "type": "object",
+        "required": [
+          "from",
+          "to",
+          "folder"
+        ],
+        "title": "DiskMove"
+      },
+      "DiskPreview": {
+        "properties": {
+          "root": {
+            "type": "string",
+            "title": "Root"
+          },
+          "moves": {
+            "items": {
+              "$ref": "#/components/schemas/DiskMove"
+            },
+            "type": "array",
+            "title": "Moves"
+          },
+          "applied": {
+            "type": "boolean",
+            "title": "Applied"
+          }
+        },
+        "type": "object",
+        "required": [
+          "root",
+          "moves",
+          "applied"
+        ],
+        "title": "DiskPreview"
+      },
+      "DiskResult": {
+        "properties": {
+          "root": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Root"
+          },
+          "moved": {
+            "type": "integer",
+            "title": "Moved",
+            "default": 0
+          },
+          "restored": {
+            "type": "integer",
+            "title": "Restored",
+            "default": 0
+          },
+          "left": {
+            "type": "integer",
+            "title": "Left",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "DiskResult"
+      },
       "DriveAuthorization": {
         "properties": {
           "authorization_url": {
@@ -4549,6 +4817,232 @@
           "secret_configured"
         ],
         "title": "DriveStatus"
+      },
+      "Drop": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Paths"
+          },
+          "file_count": {
+            "type": "integer",
+            "title": "File Count"
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "engine": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DropProject"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/DropFile"
+            },
+            "type": "array",
+            "title": "Files"
+          },
+          "disk": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disk"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "mode",
+          "paths",
+          "file_count",
+          "skipped",
+          "created_at"
+        ],
+        "title": "Drop"
+      },
+      "DropBody": {
+        "properties": {
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Paths"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "move",
+              "copy"
+            ],
+            "title": "Mode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "paths",
+          "mode"
+        ],
+        "title": "DropBody"
+      },
+      "DropFile": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "rel_path": {
+            "type": "string",
+            "title": "Rel Path"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "folder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_id",
+          "rel_path",
+          "name",
+          "kind",
+          "status"
+        ],
+        "title": "DropFile"
+      },
+      "DropPreview": {
+        "properties": {
+          "files": {
+            "type": "integer",
+            "title": "Files"
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped"
+          }
+        },
+        "type": "object",
+        "required": [
+          "files",
+          "skipped"
+        ],
+        "title": "DropPreview"
+      },
+      "DropProject": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "DropProject"
       },
       "EditClaim": {
         "properties": {
@@ -5089,6 +5583,17 @@
               }
             ],
             "title": "Description"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
           }
         },
         "type": "object",
@@ -5654,6 +6159,20 @@
         ],
         "title": "Label"
       },
+      "LabelBody": {
+        "properties": {
+          "label_text": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Label Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label_text"
+        ],
+        "title": "LabelBody"
+      },
       "Lane": {
         "properties": {
           "id": {
@@ -5989,6 +6508,23 @@
         ],
         "title": "PresetView"
       },
+      "PreviewBody": {
+        "properties": {
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Paths"
+          }
+        },
+        "type": "object",
+        "required": [
+          "paths"
+        ],
+        "title": "PreviewBody"
+      },
       "ProviderInfo": {
         "properties": {
           "kind": {
@@ -6072,110 +6608,6 @@
           "total_proposed"
         ],
         "title": "ReviewView"
-      },
-      "Root": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "path": {
-            "type": "string",
-            "title": "Path"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "file",
-              "folder"
-            ],
-            "title": "Kind"
-          },
-          "watch": {
-            "type": "boolean",
-            "title": "Watch"
-          },
-          "created_at": {
-            "type": "string",
-            "title": "Created At"
-          },
-          "include_hidden": {
-            "type": "boolean",
-            "title": "Include Hidden",
-            "default": false
-          },
-          "exclude": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Exclude"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "path",
-          "kind",
-          "watch",
-          "created_at"
-        ],
-        "title": "Root"
-      },
-      "ScanLocation": {
-        "properties": {
-          "path": {
-            "type": "string",
-            "title": "Path"
-          },
-          "label": {
-            "type": "string",
-            "title": "Label"
-          },
-          "kind": {
-            "type": "string",
-            "title": "Kind"
-          }
-        },
-        "type": "object",
-        "required": [
-          "path",
-          "label",
-          "kind"
-        ],
-        "title": "ScanLocation"
-      },
-      "ScanLocations": {
-        "properties": {
-          "locations": {
-            "items": {
-              "$ref": "#/components/schemas/ScanLocation"
-            },
-            "type": "array",
-            "title": "Locations"
-          },
-          "default_exclusions": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Default Exclusions"
-          },
-          "supported_extensions": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Supported Extensions"
-          }
-        },
-        "type": "object",
-        "required": [
-          "locations",
-          "default_exclusions",
-          "supported_extensions"
-        ],
-        "title": "ScanLocations"
       },
       "SchemaBody": {
         "properties": {
@@ -6371,6 +6803,17 @@
               }
             ],
             "title": "Description"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
           }
         },
         "type": "object",
@@ -6718,6 +7161,19 @@
           "entities"
         ],
         "title": "TimelineView"
+      },
+      "Transcript": {
+        "properties": {
+          "transcript": {
+            "type": "string",
+            "title": "Transcript"
+          }
+        },
+        "type": "object",
+        "required": [
+          "transcript"
+        ],
+        "title": "Transcript"
       },
       "TranscriptBody": {
         "properties": {

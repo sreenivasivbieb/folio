@@ -109,7 +109,7 @@ export function GraphView() {
       // attribute below); all other labels use the theme's text colour.
       labelColor: { attribute: "labelColor", color: cssVar("--text") },
       edgeLabelColor: { color: cssVar("--text-3") },
-      labelRenderedSizeThreshold: 7,
+      labelRenderedSizeThreshold: graph.order <= 80 ? 0 : 7, // small graphs: every node keeps its name
       stagePadding: 120, // room for labels at the edges, and nodes clear of the legend overlay
       nodeReducer: (node, attrs) => {
         if (selectedRef.current.has(node)) return { ...attrs, highlighted: true, zIndex: 1, labelColor: "#18181b" };

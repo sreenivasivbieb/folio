@@ -25,20 +25,26 @@ class MediaParser:
 
     def parse(self, path: Path, ctx: ParseContext) -> list[ParsedUnit]:
         stt = ctx.transcriber
-        if stt is None or not stt.installed():
-            raise Unavailable("speech model not downloaded — download it in Settings → Voice to index audio/video")
         report = ctx.extra.get("progress") or (lambda f, m: None)
         report(0.02, "decoding audio")
         with tempfile.TemporaryDirectory() as tmp:
             audio = decode_untrusted(path, Path(tmp) / "audio.npy", ctx.extra.get("timeout_s", 1800),
                                      ctx.extra.get("memory_mb", 4096))
+        kind = "Video" if path.suffix.lower() in VIDEO else "Audio"
+        if audio.size == 0:  # a silent screen recording: still findable by name and labels
+            return [ParsedUnit(f"{kind} {path.name} — no audio track. Label it to describe what it shows.",
+                               {"kind": "time", "start": 0.0, "end": 0.0})]
+        if stt is None or not stt.installed():
+            raise Unavailable("speech model not downloaded — download it in Settings → Voice to index audio/video")
         minutes = audio.size / SAMPLE_RATE / 60
         report(0.05, f"transcribing {minutes:.0f} min of audio")
         segments = stt.transcribe(
             audio, prompt=ctx.vocabulary_prompt,
             on_progress=lambda f: report(0.05 + 0.9 * f, f"transcribing {round(f * 100)}%"),
         )
-        return [
+        units = [
             ParsedUnit(s.text, {"kind": "time", "start": round(s.start, 2), "end": round(s.end, 2)})
             for s in segments if s.text
         ]
+        return units or [ParsedUnit(f"{kind} {path.name} — no speech detected. Label it to describe what it shows.",
+                                    {"kind": "time", "start": 0.0, "end": round(audio.size / SAMPLE_RATE, 2)})]

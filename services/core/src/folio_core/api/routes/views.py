@@ -56,6 +56,9 @@ def search(q: str, c: C, k: int = 20) -> SearchResult:
                             files=c.search.recent_files(8))  # type: ignore[arg-type]
     # Files are listed in their own group: their Document entities would only duplicate them.
     entities = [e for e in repo.search_entities(c.kdb, q, limit=14) if e.type != "Document"][:10]
+    # Label-first: projects whose user label or AI summary matches come first.
+    projects = c.search.projects_matching(q)
+    entities = projects + [e for e in entities if e.id not in {p.id for p in projects}]
     return SearchResult(entities=entities, passages=c.search.search(q, k),  # type: ignore[arg-type]
                         files=c.search.files(q, entities))  # type: ignore[arg-type]
 

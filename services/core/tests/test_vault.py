@@ -106,3 +106,56 @@ def test_failed_copy_leaves_no_partial_file(container, tmp_path, monkeypatch):
     stats = container.vault.import_paths([str(f)], "copy")
     assert stats["failed"] == 1 and f.exists()
     assert not [p for p in container.vault.dir.rglob("*") if p.is_file()]
+
+
+def test_moved_data_folder_does_not_duplicate_files(container, tmp_path):
+    import shutil
+
+    from .conftest import make_container
+
+    f = tmp_path / "keep.txt"
+    f.write_text("vault content about kites")
+    container.vault.import_paths([str(f)], "move")
+    drain(container)
+    sid = _vault_files(container)[0].id
+    container.vault.trash(sid)
+    container.vault.restore(sid)
+    drain(container)
+    container.kdb._writer.execute("PRAGMA wal_checkpoint(TRUNCATE)")  # a consistent copy on disk
+    container.index._writer.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    moved = tmp_path / "moved"
+    shutil.copytree(container.settings.data_dir, moved / "data")  # e.g. a new FOLIO_DATA_DIR
+    c2 = make_container(moved)
+    c2.start(background_scan=False)
+    try:
+        c2.ingestion.rescan_all()
+        drain(c2)
+        files = [s for s in repo.list_sources(c2.kdb) if s.status.value not in ("forgotten", "removed")]
+        assert len(files) == 1 and c2.vault.is_vault_path(Path(files[0].path))
+        c2.vault.trash(files[0].id)  # trash/restore work at the new location
+        c2.vault.restore(files[0].id)
+    finally:
+        c2.workers.stop()
+
+
+def test_smart_ignore_skips_junk_and_counts_it(container, tmp_path):
+    proj = tmp_path / "solar"
+    for rel in ("docs/architecture.md", "data/readings.csv.txt", "notes.txt",
+                "node_modules/react/index.js", "node_modules/react/README.md", ".git/config",
+                "build/out.txt", "dist/bundle.js", "target/debug/app", "venv/lib/x.py",
+                ".vscode/settings.json", "package-lock.json", "uv.lock", "tool.exe", "lib/libfoo.so.6",
+                "app.pyc", "disk.iso", ".DS_Store", "Thumbs.db"):
+        f = proj / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(f"content of {rel}")  # unique, so the duplicate check does not interfere
+    assert container.vault.preview([str(proj)]) == {"files": 3, "skipped": 16}
+    stats = container.vault.import_paths([str(proj)], "copy")
+    assert stats["imported"] == 3 and stats["skipped"] == 16
+    names = sorted(Path(s.path).name for s in _vault_files(container))
+    assert names == ["architecture.md", "notes.txt", "readings.csv.txt"]
+
+
+def test_a_dropped_binary_is_skipped_not_imported(container, tmp_path):
+    exe = tmp_path / "setup.exe"
+    exe.write_bytes(b"MZ")
+    assert container.vault.preview([str(exe)]) == {"files": 0, "skipped": 1}

@@ -180,64 +180,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/roots": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Roots */
-        get: operations["list_roots_api_roots_get"];
-        put?: never;
-        /**
-         * Add Root
-         * @description Select a file or folder. Nothing is copied or moved; indexing starts in the background.
-         */
-        post: operations["add_root_api_roots_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/roots/{root_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Remove Root
-         * @description Stop tracking a folder: its files leave the list and the index; knowledge is kept.
-         */
-        delete: operations["remove_root_api_roots__root_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/rescan": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Rescan */
-        post: operations["rescan_api_rescan_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/sources": {
         parameters: {
             query?: never;
@@ -247,23 +189,6 @@ export interface paths {
         };
         /** List Sources */
         get: operations["list_sources_api_sources_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/scan/locations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Locations */
-        get: operations["locations_api_scan_locations_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1251,6 +1176,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/vault/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Drop
+         * @description Count what a drop would add before anything is moved or copied.
+         */
+        post: operations["preview_drop_api_vault_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/vault/import": {
         parameters: {
             query?: never;
@@ -1263,7 +1208,7 @@ export interface paths {
         /**
          * Import Files
          * @description Queue the import; progress shows in Activity. The list of paths comes from the file picker
-         *     or from files dropped onto the window.
+         *     or from files dropped onto the window. Junk is skipped automatically and counted.
          */
         post: operations["import_files_api_vault_import_post"];
         delete?: never;
@@ -1374,6 +1319,141 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/drops": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Drops */
+        get: operations["list_drops_api_drops_get"];
+        put?: never;
+        /**
+         * Create Drop
+         * @description Register dropped files/folders (junk skipped) and import them; then ask for a label.
+         */
+        post: operations["create_drop_api_drops_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/drops/{drop_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Drop */
+        get: operations["get_drop_api_drops__drop_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/drops/{drop_id}/label": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Label Drop
+         * @description The user's words about the drop: the AI organizes the files from them.
+         */
+        post: operations["label_drop_api_drops__drop_id__label_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/drops/{drop_id}/disk-organization/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disk Preview
+         * @description Where each file would move inside the dropped folder. Nothing is moved.
+         */
+        post: operations["disk_preview_api_drops__drop_id__disk_organization_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/drops/{drop_id}/apply-disk-organization": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Disk
+         * @description Move the files into the AI folders inside the dropped folder (only on explicit request).
+         */
+        post: operations["apply_disk_api_drops__drop_id__apply_disk_organization_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/drops/{drop_id}/disk-organization/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo Disk */
+        post: operations["undo_disk_api_drops__drop_id__disk_organization_undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/voice/transcribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Transcribe
+         * @description Stop push-to-talk and return the words only (for the drop label box).
+         */
+        post: operations["transcribe_api_voice_transcribe_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1392,23 +1472,6 @@ export interface components {
             proposed: number;
             /** Rate */
             rate: number | null;
-        };
-        /** AddRoot */
-        AddRoot: {
-            /** Path */
-            path: string;
-            /**
-             * Watch
-             * @default true
-             */
-            watch: boolean;
-            /**
-             * Include Hidden
-             * @default false
-             */
-            include_hidden: boolean;
-            /** Exclude */
-            exclude?: string[] | null;
         };
         /** AliasBody */
         AliasBody: {
@@ -1576,6 +1639,44 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** DiskMove */
+        DiskMove: {
+            /** From */
+            from: string;
+            /** To */
+            to: string;
+            /** Folder */
+            folder: string;
+        };
+        /** DiskPreview */
+        DiskPreview: {
+            /** Root */
+            root: string;
+            /** Moves */
+            moves: components["schemas"]["DiskMove"][];
+            /** Applied */
+            applied: boolean;
+        };
+        /** DiskResult */
+        DiskResult: {
+            /** Root */
+            root?: string | null;
+            /**
+             * Moved
+             * @default 0
+             */
+            moved: number;
+            /**
+             * Restored
+             * @default 0
+             */
+            restored: number;
+            /**
+             * Left
+             * @default 0
+             */
+            left: number;
+        };
         /** DriveAuthorization */
         DriveAuthorization: {
             /** Authorization Url */
@@ -1619,6 +1720,79 @@ export interface components {
             client_id: string;
             /** Secret Configured */
             secret_configured: boolean;
+        };
+        /** Drop */
+        Drop: {
+            /** Id */
+            id: string;
+            /** Status */
+            status: string;
+            /** Mode */
+            mode: string;
+            /** Paths */
+            paths: string[];
+            /** File Count */
+            file_count: number;
+            /** Skipped */
+            skipped: number;
+            /** Label */
+            label?: string | null;
+            /** Error */
+            error?: string | null;
+            /** Engine */
+            engine?: string | null;
+            /** Created At */
+            created_at: string;
+            project?: components["schemas"]["DropProject"] | null;
+            /** Plan */
+            plan?: {
+                [key: string]: unknown;
+            } | null;
+            /** Files */
+            files?: components["schemas"]["DropFile"][];
+            /** Disk */
+            disk?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** DropBody */
+        DropBody: {
+            /** Paths */
+            paths: string[];
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "move" | "copy";
+        };
+        /** DropFile */
+        DropFile: {
+            /** Source Id */
+            source_id: string;
+            /** Rel Path */
+            rel_path: string;
+            /** Name */
+            name: string;
+            /** Kind */
+            kind: string;
+            /** Status */
+            status: string;
+            /** Folder */
+            folder?: string | null;
+        };
+        /** DropPreview */
+        DropPreview: {
+            /** Files */
+            files: number;
+            /** Skipped */
+            skipped: number;
+        };
+        /** DropProject */
+        DropProject: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
         };
         /** EditClaim */
         EditClaim: {
@@ -1796,6 +1970,8 @@ export interface components {
             tags?: components["schemas"]["TagRef"][];
             /** Description */
             description?: string | null;
+            /** Title */
+            title?: string | null;
         };
         /** FileRef */
         FileRef: {
@@ -1987,6 +2163,11 @@ export interface components {
             /** Created At */
             created_at: string;
         };
+        /** LabelBody */
+        LabelBody: {
+            /** Label Text */
+            label_text: string;
+        };
         /** Lane */
         Lane: {
             /** Id */
@@ -2109,6 +2290,11 @@ export interface components {
              */
             suggested_models: string[];
         };
+        /** PreviewBody */
+        PreviewBody: {
+            /** Paths */
+            paths: string[];
+        };
         /** ProviderInfo */
         ProviderInfo: {
             /** Kind */
@@ -2136,47 +2322,6 @@ export interface components {
             };
             /** Total Proposed */
             total_proposed: number;
-        };
-        /** Root */
-        Root: {
-            /** Id */
-            id: string;
-            /** Path */
-            path: string;
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "file" | "folder";
-            /** Watch */
-            watch: boolean;
-            /** Created At */
-            created_at: string;
-            /**
-             * Include Hidden
-             * @default false
-             */
-            include_hidden: boolean;
-            /** Exclude */
-            exclude?: string[];
-        };
-        /** ScanLocation */
-        ScanLocation: {
-            /** Path */
-            path: string;
-            /** Label */
-            label: string;
-            /** Kind */
-            kind: string;
-        };
-        /** ScanLocations */
-        ScanLocations: {
-            /** Locations */
-            locations: components["schemas"]["ScanLocation"][];
-            /** Default Exclusions */
-            default_exclusions: string[];
-            /** Supported Extensions */
-            supported_extensions: string[];
         };
         /** SchemaBody */
         SchemaBody: {
@@ -2240,6 +2385,8 @@ export interface components {
             tags?: components["schemas"]["TagRef"][];
             /** Description */
             description?: string | null;
+            /** Title */
+            title?: string | null;
         };
         /**
          * SourceKind
@@ -2374,6 +2521,11 @@ export interface components {
             entities: {
                 [key: string]: components["schemas"]["EntityNode"];
             };
+        };
+        /** Transcript */
+        Transcript: {
+            /** Transcript */
+            transcript: string;
         };
         /** TranscriptBody */
         TranscriptBody: {
@@ -2748,110 +2900,6 @@ export interface operations {
             };
         };
     };
-    list_roots_api_roots_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Root"][];
-                };
-            };
-        };
-    };
-    add_root_api_roots_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AddRoot"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Root"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    remove_root_api_roots__root_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                root_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Ok"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    rescan_api_rescan_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Ok"];
-                };
-            };
-        };
-    };
     list_sources_api_sources_get: {
         parameters: {
             query?: {
@@ -2880,26 +2928,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    locations_api_scan_locations_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScanLocations"];
                 };
             };
         };
@@ -4818,6 +4846,39 @@ export interface operations {
             };
         };
     };
+    preview_drop_api_vault_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DropPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     import_files_api_vault_import_post: {
         parameters: {
             query?: never;
@@ -4837,7 +4898,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Ok"];
+                    "application/json": components["schemas"]["DropPreview"];
                 };
             };
             /** @description Validation Error */
@@ -5015,6 +5076,249 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_drops_api_drops_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Drop"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_drop_api_drops_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DropBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Drop"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_drop_api_drops__drop_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                drop_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Drop"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    label_drop_api_drops__drop_id__label_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                drop_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabelBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Drop"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disk_preview_api_drops__drop_id__disk_organization_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                drop_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiskPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_disk_api_drops__drop_id__apply_disk_organization_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                drop_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiskResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_disk_api_drops__drop_id__disk_organization_undo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                drop_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiskResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    transcribe_api_voice_transcribe_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transcript"];
                 };
             };
         };

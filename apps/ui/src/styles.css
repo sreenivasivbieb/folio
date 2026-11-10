@@ -546,3 +546,7 @@ textarea.schema { width: 100%; min-height: 46vh; font-family: var(--mono); font-
 }
 .splash .stack { align-items: center; padding: 0 16px; }
 .splash .stack .btn { align-self: center; }
+
+.file-name { font-size: 11px; color: var(--text-3); }
+.file-labels-title { margin: 6px 0 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--text); }
+.tag-chip.more { background: transparent; border-style: dashed; color: var(--text-3); }

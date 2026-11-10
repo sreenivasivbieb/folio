@@ -23,7 +23,7 @@ from ..domain.errors import InvalidInput, NotFound
 from ..domain.models import Root, SourceStatus
 from ..store import repo
 from ..store.index_db import utcnow
-from .locations import DEFAULT_EXCLUSIONS, is_hidden
+from .locations import is_junk
 
 log = logging.getLogger(__name__)
 
@@ -46,10 +46,37 @@ class Vault:
         self.dir.mkdir(parents=True, exist_ok=True)
         if os.name != "nt":
             self.dir.chmod(0o700)
-        doc = self.kdb["roots"].find_one({"path": str(self.dir.resolve())})
+        here = str(self.dir.resolve())
+        doc = self.kdb["roots"].find_one({"path": here})
+        if doc is None:
+            # The data folder moved: adopt the old vault root instead of starting a second one.
+            old = next((d for d in self.kdb["roots"].find({"path": {"$regex": r"[\\/]vault$"}})
+                        if ".trash" in (d.get("exclude") or [])), None)
+            if old is not None:
+                self.kdb["roots"].update_one({"_id": old["_id"]}, {"$set": {"path": here}})
+                doc = self.kdb["roots"].find_one({"_id": old["_id"]})
         if doc is not None:
             return repo.root_from_doc(doc)
         return self.ingestion.add_root(str(self.dir), watch=False, include_hidden=False, exclude=[".trash"])
+
+    def rehome(self) -> int:
+        """If Folio's data folder moved (new FOLIO_DATA_DIR, restored backup, different Windows
+        profile), stored files keep pointing at the old place. Point them at this vault again,
+        so they are not re-added as duplicates and trash/restore/export keep working."""
+        fixed = 0
+        for d in self.kdb["sources"].find({"path": {"$regex": r"[\\/]vault[\\/](?:\.trash[\\/])?[0-9a-f]{32}[\\/]"}}):
+            path = Path(d["path"])
+            if self.is_vault_path(path):
+                continue
+            parts = path.parts
+            i = max(k for k, p in enumerate(parts) if p == "vault")
+            candidate = self.dir.joinpath(*parts[i + 1:])
+            if candidate.exists():
+                self.kdb["sources"].update_one({"_id": d["_id"]}, {"$set": {"path": str(candidate)}})
+                fixed += 1
+        if fixed:
+            log.info("re-homed %d stored file(s) to %s", fixed, self.dir)
+        return fixed
 
     def is_vault_path(self, path: Path) -> bool:
         base = self.dir.resolve()
@@ -58,10 +85,12 @@ class Vault:
 
     # --- import ----------------------------------------------------------------------------
 
-    def _expand(self, paths: list[str]) -> list[tuple[Path, Path | None]]:
-        """(file, the imported folder it came from or None). Skips hidden, cache and link entries."""
+    def _expand(self, paths: list[str]) -> tuple[list[tuple[Path, Path | None]], int]:
+        """(file, the dropped folder it came from or None) for every file worth keeping, and how
+        many junk entries were skipped (hidden, node_modules, build output, lockfiles, binaries)."""
         data = self.ingestion.settings.data_dir.resolve()
         out: list[tuple[Path, Path | None]] = []
+        skipped = 0
         for raw in paths:
             p = Path(raw).expanduser()
             if not p.exists():
@@ -70,40 +99,62 @@ class Vault:
             if rp == data or data in rp.parents or rp in data.parents:
                 raise InvalidInput("that location is Folio's own storage (or contains it)")
             if p.is_symlink():
+                skipped += 1
                 continue
             if p.is_file():
-                out.append((p, None))
+                if is_junk(p, p.name, False):
+                    skipped += 1
+                else:
+                    out.append((p, None))
                 continue
             for dirpath, dirnames, filenames in os.walk(p, followlinks=False):
                 d = Path(dirpath)
-                dirnames[:] = [n for n in dirnames if not is_hidden(d / n, n) and n not in DEFAULT_EXCLUSIONS
-                               and not (d / n).is_symlink()]
+                keep = []
+                for n in dirnames:
+                    if (d / n).is_symlink() or is_junk(d / n, n, True):
+                        skipped += _count_files(d / n)
+                    else:
+                        keep.append(n)
+                dirnames[:] = keep
                 for n in filenames:
                     f = d / n
-                    if not is_hidden(f, n) and n not in DEFAULT_EXCLUSIONS and not f.is_symlink() and f.is_file():
+                    if f.is_symlink() or not f.is_file() or is_junk(f, n, False):
+                        skipped += 1
+                    else:
                         out.append((f, p))
-        return out
+        return out, skipped
 
-    def _duplicate(self, root_id: str, digest: str) -> bool:
-        return self.kdb["sources"].find_one({"root_id": root_id, "content_hash": digest, "status": LIVE}) is not None
+    def preview(self, paths: list[str]) -> dict[str, int]:
+        """How many files a drop will add, and how much junk is skipped (for the drop card)."""
+        files, skipped = self._expand(paths)
+        return {"files": len(files), "skipped": skipped}
 
-    def import_paths(self, paths: list[str], mode: Mode,
-                     progress: Callable[[float, str], None] = lambda f, m: None) -> dict[str, int]:
+    def _duplicate(self, root_id: str, digest: str) -> dict[str, Any] | None:
+        return self.kdb["sources"].find_one({"root_id": root_id, "content_hash": digest, "status": LIVE})
+
+    def import_paths(self, paths: list[str], mode: Mode, drop_id: str | None = None,
+                     progress: Callable[[float, str], None] = lambda f, m: None) -> dict[str, Any]:
+        """Move/copy ``paths`` into the vault. ``stats["records"]`` lists every file of the drop
+        (new or already stored) with its path inside the dropped folder, for drop organizing."""
         if mode not in ("move", "copy"):
             raise InvalidInput("mode must be 'move' or 'copy'")
         from .service import PRIORITY_SELECTED_FILE, file_hash
 
         root = self.root()
-        files = self._expand(paths)
-        stats = {"imported": 0, "duplicates": 0, "failed": 0}
+        files, skipped = self._expand(paths)
+        stats: dict[str, Any] = {"imported": 0, "duplicates": 0, "failed": 0, "skipped": skipped, "records": []}
         folders: set[Path] = set()
         for i, (src, folder) in enumerate(files):
             if i % 10 == 0:
                 progress(i / max(len(files), 1), f"{i} of {len(files)} files")
             try:
                 digest = file_hash(src)
-                if self._duplicate(root.id, digest):
+                rel = f"{folder.name}/{src.relative_to(folder).as_posix()}" if folder is not None else src.name
+                existing = self._duplicate(root.id, digest)
+                if existing is not None:
                     stats["duplicates"] += 1  # already in Folio: the original is left untouched
+                    stats["records"].append({"source_id": existing["_id"], "rel_path": rel,
+                                             "origin_path": str(src.resolve()), "duplicate": True})
                     continue
                 origin = src.resolve()
                 dest = self.dir / uuid.uuid4().hex / src.name
@@ -125,8 +176,10 @@ class Vault:
                 found = repo.source_by_path(self.kdb, str(dest))
                 if found is not None:
                     self.kdb["sources"].update_one({"_id": found.id}, {"$set": {
-                        "origin_path": str(origin),
+                        "origin_path": str(origin), "drop_id": drop_id,
                         "imported_at": utcnow(), "import_mode": mode, "content_hash": digest}})
+                    stats["records"].append({"source_id": found.id, "rel_path": rel,
+                                             "origin_path": str(origin), "duplicate": False})
                 stats["imported"] += 1
             except OSError as exc:
                 log.warning("could not import %s: %s", src, exc)
@@ -138,13 +191,18 @@ class Vault:
         progress(1, f"{stats['imported']} added · {stats['duplicates']} already in Folio · {stats['failed']} failed")
         return stats
 
+    on_imported: Callable[[str, dict[str, Any]], None] | None = None  # set by the drop service
+
     def import_job(self, job: Any) -> str:
-        stats = self.import_paths(job.payload["paths"], job.payload["mode"],
+        stats = self.import_paths(job.payload["paths"], job.payload["mode"], job.payload.get("drop_id"),
                                   lambda f, m: self.queue.progress(job.id, f, m))
+        if job.payload.get("drop_id") and self.on_imported is not None:
+            self.on_imported(job.payload["drop_id"], stats)
         verb = "Moved" if job.payload["mode"] == "move" else "Copied"
         return (f"{verb} {stats['imported']} file(s) into Folio"
                 + (f"; {stats['duplicates']} already there (left in place)" if stats["duplicates"] else "")
-                + (f"; {stats['failed']} could not be imported" if stats["failed"] else ""))
+                + (f"; {stats['failed']} could not be imported" if stats["failed"] else "")
+                + (f"; {stats['skipped']} junk file(s) skipped" if stats["skipped"] else ""))
 
     # --- trash, restore, delete, export ------------------------------------------------------
 
@@ -238,3 +296,13 @@ def _prune_empty(folder: Path) -> None:
     for dirpath, _dirs, _files in os.walk(folder, topdown=False):
         with contextlib.suppress(OSError):
             Path(dirpath).rmdir()  # only succeeds when empty (hidden files keep a folder)
+
+
+def _count_files(folder: Path, cap: int = 100_000) -> int:
+    """Files inside a skipped folder (node_modules can hold tens of thousands): for the summary."""
+    n = 0
+    for _dirpath, _dirs, files in os.walk(folder, followlinks=False):
+        n += len(files)
+        if n >= cap:
+            break
+    return n

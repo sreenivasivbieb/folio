@@ -141,6 +141,7 @@ export function SourceViewer({ sourceId }: { sourceId: string }) {
             <Icon name="tag" size={13} /> Add label
           </button>
         </div>
+        {detail.title && <p className="file-labels-title">{detail.title}</p>}
         {detail.description && <p className="file-labels-desc">{detail.description}</p>}
         {!!detail.tags?.length && (
           <div className="file-tags">

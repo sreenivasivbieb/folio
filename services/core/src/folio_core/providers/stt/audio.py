@@ -60,7 +60,7 @@ def load_media(path: Path) -> np.ndarray:
     chunks: list[np.ndarray] = []
     with av.open(str(path), mode="r") as container:
         if not container.streams.audio:
-            raise Unavailable(f"{path.name} has no audio track")
+            return np.zeros(0, dtype=np.float32)  # e.g. a silent screen recording: nothing to transcribe
         stream = container.streams.audio[0]
         resampler = av.AudioResampler(format="s16", layout="mono", rate=SAMPLE_RATE)
         for frame in container.decode(stream):
@@ -71,6 +71,18 @@ def load_media(path: Path) -> np.ndarray:
     if not chunks:
         return np.zeros(0, dtype=np.float32)
     return np.concatenate(chunks).astype(np.float32) / 32768.0
+
+
+def clean_child_error(stderr: bytes) -> str:
+    """The useful last line of a child process's error output, without packaging noise like
+    '[PYI-123:ERROR] Failed to execute script' or Python exception class paths."""
+    lines = [ln.strip() for ln in stderr.decode(errors="replace").splitlines() if ln.strip()]
+    lines = [ln for ln in lines if not ln.startswith(("[PYI-", "Traceback", "File ")) and "Failed to execute script" not in ln]
+    if not lines:
+        return ""
+    import re
+
+    return re.sub(r"^(?:[\w.]+\.)?(?:Unavailable|InvalidInput|[A-Z]\w*Error):\s*", "", lines[-1])[:300]
 
 
 def decode_untrusted(src: Path, dst: Path, timeout_s: int, memory_mb: int) -> np.ndarray:
@@ -88,8 +100,7 @@ def decode_untrusted(src: Path, dst: Path, timeout_s: int, memory_mb: int) -> np
     except subprocess.TimeoutExpired as exc:
         raise Unavailable(f"decoding audio timed out after {timeout_s}s") from exc
     if proc.returncode != 0:
-        tail = " ".join(proc.stderr.decode(errors="replace").strip().splitlines()[-2:])
-        raise Unavailable(f"cannot decode the audio: {tail or f'exit code {proc.returncode}'}")
+        raise Unavailable(f"cannot decode the audio: {clean_child_error(proc.stderr) or f'exit code {proc.returncode}'}")
     return np.load(dst)
 
 
